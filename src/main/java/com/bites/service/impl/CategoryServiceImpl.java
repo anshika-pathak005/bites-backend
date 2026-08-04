@@ -3,6 +3,7 @@ package com.bites.service.impl;
 import com.bites.dto.request.CategoryRequest;
 import com.bites.dto.response.CategoryResponse;
 import com.bites.entity.Category;
+import com.bites.exception.BadRequestException;
 import com.bites.exception.ResourceNotFoundException;
 import com.bites.mapper.CategoryMapper;
 import com.bites.repository.CategoryRepository;
@@ -53,6 +54,12 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     @Transactional
     public CategoryResponse create(CategoryRequest request) {
+        // Reject a duplicate name up front (case-insensitive) — without
+        // this, resubmitting the same form twice silently creates two
+        // categories with identical data.
+        if (categoryRepository.existsByNameIgnoreCase(request.name())) {
+            throw new BadRequestException("A category named '" + request.name() + "' already exists");
+        }
         Category category = categoryMapper.toEntity(request);
         return categoryMapper.toResponse(categoryRepository.save(category));
     }
@@ -61,6 +68,12 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     @Transactional
     public CategoryResponse update(Long id, CategoryRequest request) {
+        // Same duplicate-name check as create(), but excluding this
+        // category's own current row so renaming "Pizza" to "Pizza" doesn't
+        // falsely flag itself as a duplicate.
+        if (categoryRepository.existsByNameIgnoreCaseAndIdNot(request.name(), id)) {
+            throw new BadRequestException("A category named '" + request.name() + "' already exists");
+        }
         Category category = findEntity(id);
         categoryMapper.updateEntityFromRequest(request, category);
         return categoryMapper.toResponse(categoryRepository.save(category));

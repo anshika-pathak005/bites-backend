@@ -14,6 +14,11 @@ public interface CustomerAddressMapper {
     // explicitly to reach through the relationship to grab them.
     @Mapping(source = "deliveryArea.id", target = "deliveryAreaId")
     @Mapping(source = "deliveryArea.name", target = "deliveryAreaName")
+    // Lombok's isDefault() getter on the entity gets JavaBean-stripped to
+    // property "default", but CustomerAddressResponse's isDefault record
+    // component keeps its literal name — without this, MapStruct silently
+    // leaves isDefault as false instead of failing loudly.
+    @Mapping(source = "default", target = "isDefault")
     CustomerAddressResponse toResponse(CustomerAddress customerAddress);
 
     // deliveryArea itself is left out here because the service must first
@@ -22,5 +27,9 @@ public interface CustomerAddressMapper {
     // database lookup on its own.
     @Mapping(target = "deliveryArea", ignore = true)
     @Mapping(target = "customer", ignore = true)
+    // CustomerAddress has @Builder, and Lombok's builder method uses the
+    // literal field name (isDefault(...), not default(...)) — pinned
+    // explicitly here so it doesn't silently regress if the builder is removed.
+    @Mapping(source = "isDefault", target = "isDefault")
     CustomerAddress toEntity(CustomerAddressRequest request);
 }

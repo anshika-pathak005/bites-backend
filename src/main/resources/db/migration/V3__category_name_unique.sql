@@ -1,0 +1,24 @@
+-- =====================================================================
+-- Bites — Restaurant Ordering App
+-- Flyway Migration V3: Prevent duplicate category names
+-- Backstop for CategoryServiceImpl's application-level duplicate check —
+-- enforces uniqueness at the database level too.
+--
+-- NOTE: if any duplicate category names already exist in your database,
+-- this migration will FAIL until they're cleaned up first. Run this before
+-- starting the app:
+--
+--   UPDATE menu_item mi
+--   JOIN category dup ON mi.category_id = dup.id
+--   JOIN (SELECT name, MIN(id) AS keep_id FROM category GROUP BY name) keep
+--     ON keep.name = dup.name
+--   SET mi.category_id = keep.keep_id
+--   WHERE dup.id <> keep.keep_id;
+--
+--   DELETE dup FROM category dup
+--   JOIN (SELECT name, MIN(id) AS keep_id FROM category GROUP BY name) keep
+--     ON keep.name = dup.name
+--   WHERE dup.id <> keep.keep_id;
+-- =====================================================================
+ALTER TABLE category
+    ADD CONSTRAINT uq_category_name UNIQUE (name);
