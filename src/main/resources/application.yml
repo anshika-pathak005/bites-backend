@@ -1,0 +1,63 @@
+spring:
+  application:
+    name: bites-backend
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE}
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate   # schema is owned by Flyway migrations, not Hibernate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
+
+server:
+  port: ${PORT}
+  error:
+    include-message: always
+    include-binding-errors: always
+
+# No fallback values anywhere in this file — every setting below must come
+# from .env (locally) or real environment variables (everywhere else). If
+# one is missing, the app fails to start instead of silently running with a
+# guessable/default value. See .env.example for the full list of keys.
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  jwt:
+    secret: ${JWT_SECRET}
+    access-token-expiration-ms: ${JWT_ACCESS_EXP_MS}
+    refresh-token-expiration-ms: ${JWT_REFRESH_EXP_MS}
+  cloudinary:
+    cloud-name: ${CLOUDINARY_CLOUD_NAME}
+    api-key: ${CLOUDINARY_API_KEY}
+    api-secret: ${CLOUDINARY_API_SECRET}
+  admin:
+    # Used only once, by AdminSeeder, to create the very first admin account
+    # on a brand new database. Change these via env vars in every real
+    # deployment, and change the password again after first login.
+    default-email: ${DEFAULT_ADMIN_EMAIL}
+    default-password: ${DEFAULT_ADMIN_PASSWORD}
+
+springdoc:
+  swagger-ui:
+    path: /docs
+  api-docs:
+    path: /api-docs
+
+logging:
+  level:
+    root: INFO
+    com.bites: DEBUG

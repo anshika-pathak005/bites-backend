@@ -1,0 +1,12 @@
+spring:
+  jpa:
+    show-sql: false
+  flyway:
+    # Refuses to run flyway:clean (which drops every table) against this
+    # database, so it can never happen by accident in production.
+    clean-disabled: true
+
+logging:
+  level:
+    root: WARN
+    com.bites: INFO
