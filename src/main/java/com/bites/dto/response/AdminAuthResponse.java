@@ -1,11 +1,15 @@
 package com.bites.dto.response;
 
-// Returned by both login and refresh — the frontend stores accessToken to
-// send with every future request, and refreshToken to silently get a new
-// accessToken once the current one expires.
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+// Returned by both login and refresh. accessToken goes to the frontend to
+// send with every future request. refreshToken is intentionally never sent
+// in the JSON body (@JsonIgnore) — AdminAuthController reads it off this
+// object just long enough to set it as an HttpOnly cookie instead, so it's
+// never exposed to JavaScript.
 public record AdminAuthResponse(
         String accessToken,
-        String refreshToken,
+        @JsonIgnore String refreshToken,
         AdminSummaryResponse admin
 ) {
 }

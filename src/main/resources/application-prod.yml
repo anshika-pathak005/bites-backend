@@ -6,6 +6,14 @@ spring:
     # database, so it can never happen by accident in production.
     clean-disabled: true
 
+# HTTPS, cross-site (frontend on Vercel, backend on Render) — the cookie
+# must be Secure and SameSite=None or the browser silently drops it.
+app:
+  jwt:
+    refresh-cookie:
+      secure: true
+      same-site: None
+
 logging:
   level:
     root: WARN

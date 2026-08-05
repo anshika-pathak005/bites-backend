@@ -1,5 +1,7 @@
 package com.bites.config;
 
+import com.bites.security.JwtAccessDeniedHandler;
+import com.bites.security.JwtAuthenticationEntryPoint;
 import com.bites.security.JwtAuthenticationFilter;
 import com.bites.security.LoginRateLimitFilter;
 import org.springframework.context.annotation.Bean;
@@ -30,10 +32,19 @@ public class SecurityConfig {
     // Filter that throttles repeated attempts against the admin login endpoint.
     private final LoginRateLimitFilter loginRateLimitFilter;
 
-    // Injects the JWT and login rate-limit filters so they can be wired into the security filter chain below.
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, LoginRateLimitFilter loginRateLimitFilter) {
+    // Returns 401 for missing/invalid/expired tokens, instead of Spring Security's default 403.
+    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+
+    // Returns 403 for a valid token that lacks the required role.
+    private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
+
+    // Injects the JWT/login-rate-limit filters and the 401/403 handlers so they can be wired into the security filter chain below.
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, LoginRateLimitFilter loginRateLimitFilter,
+                           JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint, JwtAccessDeniedHandler jwtAccessDeniedHandler) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.loginRateLimitFilter = loginRateLimitFilter;
+        this.jwtAuthenticationEntryPoint = jwtAuthenticationEntryPoint;
+        this.jwtAccessDeniedHandler = jwtAccessDeniedHandler;
     }
 
     /*
@@ -80,6 +91,10 @@ public class SecurityConfig {
                         // Everything else under /api/admin/** requires a valid admin JWT
                         .requestMatchers("/api/admin/**").authenticated()
                         .anyRequest().authenticated()
+                )
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                        .accessDeniedHandler(jwtAccessDeniedHandler)
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(loginRateLimitFilter, UsernamePasswordAuthenticationFilter.class);

@@ -2,6 +2,14 @@ spring:
   jpa:
     show-sql: true
 
+# Plain HTTP on localhost — Secure cookies would never be sent back by the
+# browser here, and frontend+backend are same-site so Lax is enough.
+app:
+  jwt:
+    refresh-cookie:
+      secure: false
+      same-site: Lax
+
 logging:
   level:
     org.hibernate.SQL: DEBUG
