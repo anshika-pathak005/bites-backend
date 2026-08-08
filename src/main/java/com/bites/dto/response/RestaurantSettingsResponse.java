@@ -13,6 +13,16 @@ public record RestaurantSettingsResponse(
         String email,
         String phone,
         String address,
+
+        // Restaurant's own coordinates, used as the origin point for the
+        // 8km delivery-radius check on guest addresses. Null until an admin
+        // sets them on the Settings screen.
+        BigDecimal latitude,
+        BigDecimal longitude,
+
+        // Minutes after placedAt a guest can still self-cancel a PENDING order.
+        int cancellationWindowMinutes,
+
         LocalTime openingTime,
         LocalTime closingTime,
 

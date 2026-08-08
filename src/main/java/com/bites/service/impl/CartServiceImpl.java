@@ -23,7 +23,7 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class CartServiceImpl implements CartService {
 
-    // Used to load and save the Cart row itself (one row per guest session).
+    // Used to load and save the Cart row itself (one row per guest).
     private final CartRepository cartRepository;
 
     // Used to load and save the individual line items inside a cart.
@@ -34,16 +34,16 @@ public class CartServiceImpl implements CartService {
     private final MenuItemRepository menuItemRepository;
 
     @Override
-    public CartResponse getOrCreateCart(String sessionId) {
+    public CartResponse getOrCreateCart(String guestId) {
         // Step 1:
-        // Try to find an existing cart for this guest session.
+        // Try to find an existing cart for this guest.
         // Step 2:
         // If none exists yet (this is a brand new visitor), create an empty
         // cart row for them right now so future add-to-cart calls have
         // something to attach items to.
-        Cart cart = cartRepository.findBySessionId(sessionId)
+        Cart cart = cartRepository.findByGuestId(guestId)
                 .orElseGet(() -> cartRepository.save(
-                        Cart.builder().sessionId(sessionId).build()));
+                        Cart.builder().guestId(guestId).build()));
 
         // Step 3:
         // Build the full response (cart + its items + total) and send it back.
@@ -52,10 +52,10 @@ public class CartServiceImpl implements CartService {
 
     @Override
     @Transactional
-    public CartResponse addItem(String sessionId, Long menuItemId, int quantity) {
+    public CartResponse addItem(String guestId, Long menuItemId, int quantity) {
         // Step 1:
         // Make sure this guest has a cart to add into (creates one if needed).
-        Cart cart = getOrCreateCartEntity(sessionId);
+        Cart cart = getOrCreateCartEntity(guestId);
 
         // Step 2:
         // Load the menu item being added and confirm it actually exists and
@@ -100,11 +100,11 @@ public class CartServiceImpl implements CartService {
 
     @Override
     @Transactional
-    public CartResponse updateItemQuantity(String sessionId, Long cartItemId, int quantity) {
+    public CartResponse updateItemQuantity(String guestId, Long cartItemId, int quantity) {
         // Step 1:
         // Find the guest's cart. If there isn't one, there's nothing to update.
-        Cart cart = cartRepository.findBySessionId(sessionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Cart not found for this session"));
+        Cart cart = cartRepository.findByGuestId(guestId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cart not found for this guest"));
 
         // Step 2:
         // Find the specific cart item and confirm it actually belongs to
@@ -114,7 +114,7 @@ public class CartServiceImpl implements CartService {
                 .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + cartItemId));
 
         if (!item.getCart().getId().equals(cart.getId())) {
-            throw new BadRequestException("This cart item does not belong to the given cart session");
+            throw new BadRequestException("This cart item does not belong to the given cart");
         }
 
         // Step 3:
@@ -134,19 +134,19 @@ public class CartServiceImpl implements CartService {
 
     @Override
     @Transactional
-    public CartResponse removeItem(String sessionId, Long cartItemId) {
+    public CartResponse removeItem(String guestId, Long cartItemId) {
         // Removing an item is really just "update quantity to 0" — reuse
         // that same logic instead of duplicating it.
-        return updateItemQuantity(sessionId, cartItemId, 0);
+        return updateItemQuantity(guestId, cartItemId, 0);
     }
 
     @Override
     @Transactional
-    public void clearCart(String sessionId) {
+    public void clearCart(String guestId) {
         // Step 1:
-        // Find the cart for this session — if there isn't one, there is
+        // Find the cart for this guest — if there isn't one, there is
         // nothing to clear, so we simply do nothing instead of throwing.
-        cartRepository.findBySessionId(sessionId).ifPresent(cart ->
+        cartRepository.findByGuestId(guestId).ifPresent(cart ->
                 // Step 2:
                 // Delete every item that belongs to this cart (used right
                 // after an order is successfully placed).
@@ -157,10 +157,10 @@ public class CartServiceImpl implements CartService {
     // Internal helper: same lookup-or-create logic as getOrCreateCart, but
     // returns the raw Cart entity instead of a response DTO, since other
     // methods in this class need the entity itself to attach items to it.
-    private Cart getOrCreateCartEntity(String sessionId) {
-        return cartRepository.findBySessionId(sessionId)
+    private Cart getOrCreateCartEntity(String guestId) {
+        return cartRepository.findByGuestId(guestId)
                 .orElseGet(() -> cartRepository.save(
-                        Cart.builder().sessionId(sessionId).build()));
+                        Cart.builder().guestId(guestId).build()));
     }
 
     // Internal helper: turns a Cart entity into the full CartResponse the
@@ -193,6 +193,6 @@ public class CartServiceImpl implements CartService {
 
         // Step 4:
         // Package everything into the final response object.
-        return new CartResponse(cart.getId(), cart.getSessionId(), itemResponses, cartSubtotal);
+        return new CartResponse(cart.getId(), itemResponses, cartSubtotal);
     }
 }

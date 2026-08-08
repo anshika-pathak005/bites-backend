@@ -34,10 +34,11 @@ import java.util.List;
  * Table is "orders" (ORDER is a reserved word in MySQL); the class stays
  * "Order" for readability in Java code.
  *
- * customer_name / customer_phone / delivery_address / landmark / delivery_charge
- * are all SNAPSHOTS taken at checkout time — never re-derived from the live
- * Customer/CustomerAddress rows, so order history stays accurate even if the
- * customer edits or deletes that address later.
+ * customer_name / customer_phone / delivery_address / landmark / pincode /
+ * delivery_charge / distance_km are all SNAPSHOTS taken at checkout time —
+ * never re-derived from the live Customer/CustomerAddress rows, so order
+ * history (and past pricing) stays accurate even if the customer edits or
+ * deletes that address later, or an admin changes the delivery pricing slabs.
  */
 @Entity
 @Table(name = "orders", uniqueConstraints = @UniqueConstraint(name = "uq_orders_order_number", columnNames = "order_number"))
@@ -58,10 +59,19 @@ public class Order {
     @Column(name = "order_number", nullable = false, length = 30)
     private String orderNumber;
 
-    // The customer who placed this order.
+    // The customer (admin-reporting record, keyed by phone) who placed this
+    // order — see CustomerService. NOT used for ownership/access control.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id", nullable = false, foreignKey = @ForeignKey(name = "fk_orders_customer"))
     private Customer customer;
+
+    // Which guest (browser) placed this order — powers "GET /api/orders"
+    // (list everything for this browser). Tracking/cancelling a SINGLE
+    // order by number does not check this field; order number alone is the
+    // bearer credential there (see OrderController) — guestId is only used
+    // for the "show me all my orders automatically" list view.
+    @Column(name = "guest_id", length = 64)
+    private String guestId;
 
     @Column(name = "customer_name", nullable = false, length = 150)
     private String customerName;
@@ -75,12 +85,20 @@ public class Order {
     @Column(length = 255)
     private String landmark;
 
-    // The delivery zone this order is being delivered to.
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "delivery_area_id", nullable = false, foreignKey = @ForeignKey(name = "fk_orders_delivery_area"))
-    private DeliveryArea deliveryArea;
+    @Column(length = 10)
+    private String pincode;
 
-    // Delivery fee for this order (snapshot, see class comment above).
+    // Straight-line distance (km) from the restaurant to the delivery
+    // address at the moment this order was placed — what deliveryCharge
+    // below was actually priced from (see DeliveryPricingService). Kept as
+    // its own column mainly for admin/support visibility and pricing-dispute
+    // audits, rather than re-deriving it from lat/lng every time.
+    @Column(name = "distance_km", precision = 6, scale = 3)
+    private BigDecimal distanceKm;
+
+    // Delivery fee for this order (snapshot, see class comment above) —
+    // resolved from the configured DeliveryChargeSlab matching distanceKm
+    // at checkout time, not from a DeliveryArea zone.
     @Column(name = "delivery_charge", nullable = false, precision = 10, scale = 2)
     private BigDecimal deliveryCharge;
 

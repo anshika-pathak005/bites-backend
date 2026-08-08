@@ -9,11 +9,6 @@ import org.mapstruct.Mapper;
 @Mapper(componentModel = "spring")
 public interface CustomerAddressMapper {
 
-    // deliveryArea.id and deliveryArea.name come from the linked DeliveryArea
-    // entity, not directly from CustomerAddress — MapStruct needs to be told
-    // explicitly to reach through the relationship to grab them.
-    @Mapping(source = "deliveryArea.id", target = "deliveryAreaId")
-    @Mapping(source = "deliveryArea.name", target = "deliveryAreaName")
     // Lombok's isDefault() getter on the entity gets JavaBean-stripped to
     // property "default", but CustomerAddressResponse's isDefault record
     // component keeps its literal name — without this, MapStruct silently
@@ -21,12 +16,10 @@ public interface CustomerAddressMapper {
     @Mapping(source = "default", target = "isDefault")
     CustomerAddressResponse toResponse(CustomerAddress customerAddress);
 
-    // deliveryArea itself is left out here because the service must first
-    // look up the actual DeliveryArea entity by id (to confirm it exists and
-    // is active) before it can be attached — a plain mapper cannot do a
-    // database lookup on its own.
-    @Mapping(target = "deliveryArea", ignore = true)
-    @Mapping(target = "customer", ignore = true)
+    // guestId itself is left out here because the controller resolves it
+    // from the HttpOnly cookie and the service attaches it — a plain
+    // mapper has no business deciding whose address this is.
+    @Mapping(target = "guestId", ignore = true)
     // CustomerAddress has @Builder, and Lombok's builder method uses the
     // literal field name (isDefault(...), not default(...)) — pinned
     // explicitly here so it doesn't silently regress if the builder is removed.

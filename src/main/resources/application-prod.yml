@@ -13,6 +13,9 @@ app:
     refresh-cookie:
       secure: true
       same-site: None
+  guest-cookie:
+    secure: true
+    same-site: None
 
 logging:
   level:

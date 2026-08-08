@@ -9,6 +9,9 @@ app:
     refresh-cookie:
       secure: false
       same-site: Lax
+  guest-cookie:
+    secure: false
+    same-site: Lax
 
 logging:
   level:

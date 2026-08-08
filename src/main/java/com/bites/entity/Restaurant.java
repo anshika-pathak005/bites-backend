@@ -44,6 +44,25 @@ public class Restaurant extends AuditableEntity {
     @Column(length = 500)
     private String address;
 
+    // Restaurant's own coordinates — the fixed "origin" point every guest
+    // address's delivery distance is measured against (see
+    // DeliveryPricingServiceImpl + HaversineUtil). Nullable because a
+    // freshly-seeded restaurant row won't have these set until an admin
+    // fills them in on the Settings screen; checkout/address-saving fails
+    // loudly (not silently) until they're configured, since distance is now
+    // the only thing delivery pricing is based on.
+    @Column(precision = 10, scale = 7)
+    private BigDecimal latitude;
+
+    @Column(precision = 10, scale = 7)
+    private BigDecimal longitude;
+
+    // Minutes after placedAt that a guest can still self-cancel a PENDING
+    // order (see OrderServiceImpl.cancel). Configurable so this
+    // doesn't need a deploy to change.
+    @Column(name = "cancellation_window_minutes", nullable = false)
+    private int cancellationWindowMinutes;
+
     // Daily time the restaurant starts accepting orders.
     @Column(name = "opening_time")
     private LocalTime openingTime;

@@ -18,12 +18,14 @@ import java.util.Optional;
 public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecificationExecutor<Order> {
 
     // Used by "Track Order using Order ID" — order numbers are unique, so
-    // this always returns at most one order.
+    // this always returns at most one order. This is the ONLY check for
+    // single-order tracking/cancellation now — order number itself is the
+    // bearer credential (see OrderController), no phone match needed.
     Optional<Order> findByOrderNumber(String orderNumber);
 
-    // Used by "Track Order using Phone Number" — one phone number can have
-    // placed many orders over time, most recent first.
-    List<Order> findByCustomerPhoneOrderByPlacedAtDesc(String customerPhone);
+    // Used by "GET /api/orders" ("My Orders") — every order placed by this
+    // browser (guestId, from the HttpOnly cookie), newest first.
+    List<Order> findByGuestIdOrderByPlacedAtDesc(String guestId);
 
     // Used by the admin dashboard's "Pending Orders" count card.
     long countByStatus(OrderStatus status);

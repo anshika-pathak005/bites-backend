@@ -10,6 +10,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import jakarta.validation.ConstraintViolationException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -26,8 +27,10 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
     }
 
-    // Catches BadRequestException and DeliveryAreaNotServiceableException, responding with 400 Bad Request.
-    @ExceptionHandler({BadRequestException.class, DeliveryAreaNotServiceableException.class})
+    // Catches BadRequestException, DeliveryAreaNotServiceableException, and
+    // AddressOutOfDeliveryRangeException, responding with 400 Bad Request.
+    @ExceptionHandler({BadRequestException.class, DeliveryAreaNotServiceableException.class,
+            AddressOutOfDeliveryRangeException.class})
     public ResponseEntity<ApiResponse<Void>> handleBadRequest(RuntimeException ex) {
         return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage());
     }
@@ -50,6 +53,26 @@ public class GlobalExceptionHandler {
         Map<String, String> fieldErrors = new LinkedHashMap<>();
         ex.getBindingResult().getFieldErrors().forEach(fe ->
                 fieldErrors.put(fe.getField(), fe.getDefaultMessage()));
+
+        ApiError error = ApiError.of("VALIDATION_ERROR", "One or more fields are invalid.", fieldErrors);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.failure(error));
+    }
+
+    // Catches validation failures on @RequestParam/@PathVariable (e.g. the
+    // latitude/longitude query params on GET /api/delivery-pricing/quote) —
+    // a different exception type than @Valid @RequestBody failures above,
+    // since these are validated directly on the method signature via
+    // @Validated on the controller class, not through a DTO's binding result.
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConstraintViolation(ConstraintViolationException ex) {
+        Map<String, String> fieldErrors = new LinkedHashMap<>();
+        ex.getConstraintViolations().forEach(violation -> {
+            // propertyPath looks like "quote.latitude" — strip the method
+            // name prefix so the frontend just sees "latitude".
+            String path = violation.getPropertyPath().toString();
+            String field = path.contains(".") ? path.substring(path.lastIndexOf('.') + 1) : path;
+            fieldErrors.put(field, violation.getMessage());
+        });
 
         ApiError error = ApiError.of("VALIDATION_ERROR", "One or more fields are invalid.", fieldErrors);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.failure(error));

@@ -1,6 +1,5 @@
 package com.bites.controller.admin;
 
-import com.bites.dto.response.CustomerAddressResponse;
 import com.bites.dto.response.CustomerResponse;
 import com.bites.service.CustomerService;
 import com.bites.util.ApiResponse;
@@ -15,6 +14,10 @@ import java.util.List;
 
 // Admin-only endpoints for the "Customers" screen — requires a valid admin
 // JWT (enforced by SecurityConfig + the @PreAuthorize check below).
+// Customer here is purely an admin-reporting record keyed by phone number —
+// it is NOT linked to addresses anymore (those are owned by guestId, an
+// anonymous per-browser identity with no admin-visible link back to a
+// specific phone number — see AddressController/GuestIdentityFilter).
 @RestController
 @RequestMapping("/api/admin/customers")
 @RequiredArgsConstructor
@@ -35,14 +38,5 @@ public class AdminCustomerController {
     public ApiResponse<CustomerResponse> getById(@PathVariable Long id) {
         return ApiResponse.success(customerService.getById(id));
     }
-
-    // Shows every saved address for this customer, on the customer detail screen.
-    @GetMapping("/{id}/addresses")
-    public ApiResponse<List<CustomerAddressResponse>> getAddresses(@PathVariable Long id) {
-        return ApiResponse.success(customerService.getAddresses(id));
-    }
-
-    // Order history for this customer is intentionally NOT here yet — it
-    // will be added once the Order module exists, since it needs
-    // OrderRepository.findByCustomerId(...) to be in place first.
 }
+

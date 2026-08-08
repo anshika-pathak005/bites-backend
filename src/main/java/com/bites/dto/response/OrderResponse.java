@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 // The full order, sent to the frontend — used by order tracking (customer
-// side) and the order detail view (admin side). Every "customer..."/
+// side) and the order detail view (admin side). Every "customer.../
 // "delivery..." field here is a SNAPSHOT taken at checkout time, so this
 // stays accurate even if the customer's live address changes later.
 public record OrderResponse(
@@ -32,7 +32,11 @@ public record OrderResponse(
 
         String landmark,
 
-        String deliveryAreaName,
+        String pincode,
+
+        // Straight-line distance (km) from the restaurant, used to price
+        // this order — see DeliveryPricingService.
+        BigDecimal distanceKm,
 
         BigDecimal deliveryCharge,
 
@@ -48,6 +52,14 @@ public record OrderResponse(
 
         PaymentStatus paymentStatus,
 
-        LocalDateTime placedAt
+        LocalDateTime placedAt,
+
+        // True if THIS order can be self-cancelled right now (status is
+        // still PENDING and placedAt is within the restaurant's configured
+        // cancellation window) — computed on the backend so the frontend
+        // never has to duplicate that time-window logic; it just shows/hides
+        // the Cancel button based on this flag. The backend re-checks both
+        // conditions again on the actual cancel call regardless.
+        boolean cancellable
 ) {
 }

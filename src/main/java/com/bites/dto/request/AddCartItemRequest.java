@@ -1,16 +1,13 @@
 package com.bites.dto.request;
 
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 // Sent by the frontend when a guest clicks "Add to Cart" on a menu item.
+// Deliberately does NOT carry any guest/session identifier — the backend
+// resolves whose cart this is from the HttpOnly guestId cookie (see
+// GuestIdentityFilter), never from something the client could tamper with.
 public record AddCartItemRequest(
-
-        // Which guest's cart this belongs to. The frontend generates this once
-        // per browser and sends it with every cart request.
-        @NotBlank(message = "sessionId is required")
-        String sessionId,
 
         // Which menu item is being added.
         @NotNull(message = "menuItemId is required")

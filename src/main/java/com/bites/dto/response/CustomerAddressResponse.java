@@ -1,5 +1,7 @@
 package com.bites.dto.response;
 
+import java.math.BigDecimal;
+
 // One saved address belonging to a customer.
 public record CustomerAddressResponse(
 
@@ -13,13 +15,15 @@ public record CustomerAddressResponse(
         // Optional extra direction hint, e.g. "next to the blue gate".
         String landmark,
 
-        // Id of the delivery area this address falls under — needed so the
-        // frontend can show/validate the delivery charge for this address.
-        Long deliveryAreaId,
+        // Optional — may be null for addresses saved before this field existed.
+        String pincode,
 
-        // Name of that delivery area, copied in so the frontend doesn't need
-        // a second API call just to show it.
-        String deliveryAreaName,
+        // Coordinates this address was saved with — used by the frontend to
+        // re-center a map/pin when editing, and by the backend to re-run the
+        // 8km radius check if the address is edited. Null only for legacy
+        // rows saved before this feature existed.
+        BigDecimal latitude,
+        BigDecimal longitude,
 
         // True if this is the address that should be pre-filled at checkout.
         boolean isDefault

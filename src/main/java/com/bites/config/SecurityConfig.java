@@ -1,9 +1,11 @@
 package com.bites.config;
 
+import com.bites.security.GuestIdentityFilter;
 import com.bites.security.JwtAccessDeniedHandler;
 import com.bites.security.JwtAuthenticationEntryPoint;
 import com.bites.security.JwtAuthenticationFilter;
 import com.bites.security.LoginRateLimitFilter;
+import com.bites.security.OrderRateLimitFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -32,17 +34,30 @@ public class SecurityConfig {
     // Filter that throttles repeated attempts against the admin login endpoint.
     private final LoginRateLimitFilter loginRateLimitFilter;
 
+    // Filter that throttles order tracking/cancellation/checkout — the
+    // endpoints that matter most now that order NUMBER alone is the bearer
+    // credential for tracking/cancelling (see OrderRateLimitFilter).
+    private final OrderRateLimitFilter orderRateLimitFilter;
+
+    // Filter that resolves/issues the HttpOnly guestId cookie on every
+    // request — the identity everything (cart/addresses/orders) hangs off,
+    // with no login involved.
+    private final GuestIdentityFilter guestIdentityFilter;
+
     // Returns 401 for missing/invalid/expired tokens, instead of Spring Security's default 403.
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
 
     // Returns 403 for a valid token that lacks the required role.
     private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
 
-    // Injects the JWT/login-rate-limit filters and the 401/403 handlers so they can be wired into the security filter chain below.
+    // Injects the JWT/rate-limit/guest-identity filters and the 401/403 handlers so they can be wired into the security filter chain below.
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, LoginRateLimitFilter loginRateLimitFilter,
+                           OrderRateLimitFilter orderRateLimitFilter, GuestIdentityFilter guestIdentityFilter,
                            JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint, JwtAccessDeniedHandler jwtAccessDeniedHandler) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.loginRateLimitFilter = loginRateLimitFilter;
+        this.orderRateLimitFilter = orderRateLimitFilter;
+        this.guestIdentityFilter = guestIdentityFilter;
         this.jwtAuthenticationEntryPoint = jwtAuthenticationEntryPoint;
         this.jwtAccessDeniedHandler = jwtAccessDeniedHandler;
     }
@@ -81,9 +96,11 @@ public class SecurityConfig {
                                 "/api/menu-items/**",
                                 "/api/delivery-areas/**",
                                 "/api/cart/**",
-                                "/api/orders/track",
+                                "/api/addresses/**",
+                                "/api/delivery-pricing/**", // GET quote — public, read-only preview of the delivery charge
                                 "/api/orders/track/**",
-                                "/api/orders", // POST checkout — guest, no auth
+                                "/api/orders", // POST checkout, GET list-mine — guest, cookie-scoped inside the service
+                                "/api/orders/*/cancel", // POST cancel — guest, order-number is the credential
                                 "/api/restaurant",
                                 "/api/admin/auth/**",
                                 "/docs/**", "/api-docs/**", "/swagger-ui/**"
@@ -97,7 +114,9 @@ public class SecurityConfig {
                         .accessDeniedHandler(jwtAccessDeniedHandler)
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(loginRateLimitFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(loginRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(orderRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(guestIdentityFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

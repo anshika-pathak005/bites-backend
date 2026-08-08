@@ -13,18 +13,32 @@ import java.util.List;
 // Business logic for the customer order lifecycle: checkout, order tracking, and admin order management.
 public interface OrderService {
 
-    // Places a new order. Handles BOTH the Cart Flow (cartSessionId is set
-    // on the request) and the Buy Now Flow (buyNowMenuItemId is set instead)
-    // — see CheckoutRequest for details on how the two are told apart.
-    OrderResponse checkout(CheckoutRequest request);
+    // Places a new order for the given guest. Handles BOTH the Cart Flow
+    // (buyNowMenuItemId absent — checks out the guest's current cart) and
+    // the Buy Now Flow (buyNowMenuItemId + buyNowQuantity set) — see
+    // CheckoutRequest for details.
+    OrderResponse checkout(String guestId, CheckoutRequest request);
+
+    // "My Orders" — every order placed by this browser (guestId, from the
+    // HttpOnly cookie), newest first. This is the automatic, no-typing
+    // path: if it's non-empty, the frontend just shows this list directly.
+    List<OrderResponse> listForGuest(String guestId);
 
     // "Track Order using Order ID" — looked up by the human-readable order
-    // number (e.g. "ORD-7K4QX9P2"), not the internal database id.
+    // number (e.g. "ORD-7K4QX9P2") alone, no guestId/phone check. This is
+    // the deliberate cross-device fallback: knowing the order number IS the
+    // credential (see OrderNumberGenerator for why that's safe), used when
+    // listForGuest comes back empty (new browser / cleared cookies).
     OrderResponse trackByOrderNumber(String orderNumber);
 
-    // "Track Order using Phone Number" — a phone number can have placed
-    // several orders over time, so this returns all of them, newest first.
-    List<OrderResponse> trackByPhone(String phone);
+    // Order Cancellation: cancels an order purely by order number — same
+    // "knowing the number is the credential" model as tracking. Only
+    // succeeds while the order is still PENDING and still within the
+    // restaurant's configured cancellation window (see Restaurant.
+    // cancellationWindowMinutes). Both conditions are re-checked here even
+    // though the frontend also checks them, since the frontend's check is
+    // just a UI convenience, not a security boundary.
+    OrderResponse cancel(String orderNumber);
 
     // Admin "Orders" screen — combinable filters (status/search/date range) + pagination.
     PageResponse<OrderResponse> searchForAdmin(OrderFilterRequest filter, Pageable pageable);

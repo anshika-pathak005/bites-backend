@@ -1,5 +1,6 @@
 package com.bites.dto.request;
 
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -24,6 +25,24 @@ public record RestaurantSettingsRequest(
         String phone,
 
         String address,
+
+        // Restaurant's own coordinates — the fixed point every guest
+        // address's delivery distance (Haversine, 8km radius) is measured
+        // from. Optional so existing settings can still be saved before an
+        // admin gets round to pinning the exact location; radius validation
+        // simply stays disabled until both are set.
+        @DecimalMin(value = "-90.0", message = "Latitude must be between -90 and 90")
+        @DecimalMax(value = "90.0", message = "Latitude must be between -90 and 90")
+        BigDecimal latitude,
+
+        @DecimalMin(value = "-180.0", message = "Longitude must be between -180 and 180")
+        @DecimalMax(value = "180.0", message = "Longitude must be between -180 and 180")
+        BigDecimal longitude,
+
+        // Minutes after an order is placed that a guest can still cancel it
+        // themselves (only while it's still PENDING). e.g. 5.
+        @jakarta.validation.constraints.Min(value = 1, message = "Cancellation window must be at least 1 minute")
+        int cancellationWindowMinutes,
 
         @NotNull(message = "Opening time is required")
         LocalTime openingTime,
