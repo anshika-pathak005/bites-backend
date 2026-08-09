@@ -8,6 +8,7 @@ import com.bites.mapper.DeliveryAreaMapper;
 import com.bites.repository.DeliveryAreaRepository;
 import com.bites.service.DeliveryAreaService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +17,7 @@ import java.util.List;
 // Handles the areas the restaurant delivers to — each one has its own
 // delivery charge. Covers listing them for customers, listing/managing them
 // for admins, and soft-deleting ones no longer served.
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -55,7 +57,9 @@ public class DeliveryAreaServiceImpl implements DeliveryAreaService {
     @Transactional
     public DeliveryAreaResponse create(DeliveryAreaRequest request) {
         DeliveryArea deliveryArea = deliveryAreaMapper.toEntity(request);
-        return deliveryAreaMapper.toResponse(deliveryAreaRepository.save(deliveryArea));
+        DeliveryArea saved = deliveryAreaRepository.save(deliveryArea);
+        log.info("Delivery area created: id={}, name={}, charge={}", saved.getId(), saved.getName(), saved.getDeliveryCharge());
+        return deliveryAreaMapper.toResponse(saved);
     }
 
     // Updates an existing delivery area's fields with whatever the admin submitted.
@@ -64,7 +68,9 @@ public class DeliveryAreaServiceImpl implements DeliveryAreaService {
     public DeliveryAreaResponse update(Long id, DeliveryAreaRequest request) {
         DeliveryArea deliveryArea = findEntity(id);
         deliveryAreaMapper.updateEntityFromRequest(request, deliveryArea);
-        return deliveryAreaMapper.toResponse(deliveryAreaRepository.save(deliveryArea));
+        DeliveryArea saved = deliveryAreaRepository.save(deliveryArea);
+        log.info("Delivery area updated: id={}, name={}", id, saved.getName());
+        return deliveryAreaMapper.toResponse(saved);
     }
 
     // Deactivates a delivery area instead of actually deleting it.
@@ -75,6 +81,7 @@ public class DeliveryAreaServiceImpl implements DeliveryAreaService {
         // Soft delete: existing customer addresses and past orders reference this area.
         deliveryArea.setActive(false);
         deliveryAreaRepository.save(deliveryArea);
+        log.info("Delivery area deactivated: id={}", id);
     }
 
     // Internal helper: fetches a DeliveryArea entity by id, or fails clearly if it doesn't exist.

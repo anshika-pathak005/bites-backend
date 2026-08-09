@@ -4,6 +4,7 @@ import com.bites.entity.Admin;
 import com.bites.entity.enums.AdminRole;
 import com.bites.repository.AdminRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Component;
 // Change the default email/password immediately after first login in a
 // real deployment (see app.admin.default-email / default-password in
 // application.yml, backed by env vars).
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class AdminSeeder implements CommandLineRunner {
@@ -42,7 +44,9 @@ public class AdminSeeder implements CommandLineRunner {
         // Step 1:
         // If even one admin already exists, do nothing — we never want this
         // to overwrite a real admin's password on every restart.
-        if (adminRepository.count() > 0) {
+        long adminCount = adminRepository.count();
+        if (adminCount > 0) {
+            log.debug("Admin accounts already exist (count={}), skipping admin seeder", adminCount);
             return;
         }
 
@@ -50,6 +54,7 @@ public class AdminSeeder implements CommandLineRunner {
         // No admins exist yet — this must be a fresh database. Create the
         // one default admin account so someone can actually log in and start
         // using the admin panel.
+        log.info("No admin account found. Creating default admin with email: {}", defaultEmail);
         Admin admin = Admin.builder()
                 .name("Default Admin")
                 .email(defaultEmail)
@@ -59,5 +64,6 @@ public class AdminSeeder implements CommandLineRunner {
                 .build();
 
         adminRepository.save(admin);
+        log.info("Default admin account created successfully: email={}", defaultEmail);
     }
 }

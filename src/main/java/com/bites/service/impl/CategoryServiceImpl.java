@@ -9,6 +9,7 @@ import com.bites.mapper.CategoryMapper;
 import com.bites.repository.CategoryRepository;
 import com.bites.service.CategoryService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +17,7 @@ import java.util.List;
 
 // Handles menu categories (e.g. "Starters", "Desserts") — listing them for
 // customers, listing/managing them for admins, and soft-deleting old ones.
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -58,10 +60,13 @@ public class CategoryServiceImpl implements CategoryService {
         // this, resubmitting the same form twice silently creates two
         // categories with identical data.
         if (categoryRepository.existsByNameIgnoreCase(request.name())) {
+            log.warn("Category creation rejected (duplicate name): {}", request.name());
             throw new BadRequestException("A category named '" + request.name() + "' already exists");
         }
         Category category = categoryMapper.toEntity(request);
-        return categoryMapper.toResponse(categoryRepository.save(category));
+        Category saved = categoryRepository.save(category);
+        log.info("Category created: id={}, name={}", saved.getId(), saved.getName());
+        return categoryMapper.toResponse(saved);
     }
 
     // Updates an existing category's fields with whatever the admin submitted.
@@ -72,11 +77,14 @@ public class CategoryServiceImpl implements CategoryService {
         // category's own current row so renaming "Pizza" to "Pizza" doesn't
         // falsely flag itself as a duplicate.
         if (categoryRepository.existsByNameIgnoreCaseAndIdNot(request.name(), id)) {
+            log.warn("Category update rejected (duplicate name): id={}, name={}", id, request.name());
             throw new BadRequestException("A category named '" + request.name() + "' already exists");
         }
         Category category = findEntity(id);
         categoryMapper.updateEntityFromRequest(request, category);
-        return categoryMapper.toResponse(categoryRepository.save(category));
+        Category saved = categoryRepository.save(category);
+        log.info("Category updated: id={}, name={}", id, saved.getName());
+        return categoryMapper.toResponse(saved);
     }
 
     // Deactivates a category instead of actually deleting it.
@@ -88,6 +96,7 @@ public class CategoryServiceImpl implements CategoryService {
         // via menu items, so we deactivate rather than hard-delete.
         category.setActive(false);
         categoryRepository.save(category);
+        log.info("Category deactivated: id={}", id);
     }
 
     // Internal helper: fetches a Category entity by id, or fails clearly if it doesn't exist.

@@ -7,11 +7,13 @@ import com.bites.mapper.CustomerMapper;
 import com.bites.repository.CustomerRepository;
 import com.bites.service.CustomerService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -34,6 +36,7 @@ public class CustomerServiceImpl implements CustomerService {
         // admin "Customers" screen showing one row per phone number, with
         // full order history, instead of a fresh row per order.
         // If no, create a brand new customer row right now and save it.
+        log.debug("Resolving customer record");
         return customerRepository.findByPhone(phone)
                 .orElseGet(() -> customerRepository.save(
                         Customer.builder()

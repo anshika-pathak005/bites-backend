@@ -32,6 +32,7 @@ import com.bites.service.DeliveryPricingService;
 import com.bites.service.OrderService;
 import com.bites.util.OrderNumberGenerator;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -45,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -73,58 +75,66 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public OrderResponse checkout(String guestId, CheckoutRequest request) {
-        List<LineItem> lineItems = resolveLineItems(guestId, request);
+        log.info("Creating order");
 
-        DeliveryPricingResult pricing = deliveryPricingService.priceDelivery(request.latitude(), request.longitude());
+        try {
+            List<LineItem> lineItems = resolveLineItems(guestId, request);
 
-        Customer customer = customerService.findOrCreateByPhone(request.name(), request.phone());
+            DeliveryPricingResult pricing = deliveryPricingService.priceDelivery(request.latitude(), request.longitude());
 
-        BigDecimal subtotal = lineItems.stream()
-                .map(LineItem::subtotal)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal grandTotal = subtotal.add(pricing.charge());
+            Customer customer = customerService.findOrCreateByPhone(request.name(), request.phone());
 
-        Order order = Order.builder()
-                .orderNumber(generateUniqueOrderNumber())
-                .customer(customer)
-                .guestId(guestId)
-                .customerName(request.name())
-                .customerPhone(request.phone())
-                .deliveryAddress(request.fullAddress())
-                .landmark(request.landmark())
-                .pincode(request.pincode())
-                .distanceKm(BigDecimal.valueOf(pricing.distanceKm()))
-                .deliveryCharge(pricing.charge())
-                .subtotal(subtotal)
-                .grandTotal(grandTotal)
-                .status(OrderStatus.PENDING)
-                .build();
+            BigDecimal subtotal = lineItems.stream()
+                    .map(LineItem::subtotal)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal grandTotal = subtotal.add(pricing.charge());
 
-        for (LineItem lineItem : lineItems) {
-            OrderItem orderItem = OrderItem.builder()
-                    .menuItem(lineItem.menuItem())
-                    .itemName(lineItem.menuItem().getName())
-                    .itemPrice(lineItem.menuItem().getPrice())
-                    .quantity(lineItem.quantity())
-                    .subtotal(lineItem.subtotal())
+            Order order = Order.builder()
+                    .orderNumber(generateUniqueOrderNumber())
+                    .customer(customer)
+                    .guestId(guestId)
+                    .customerName(request.name())
+                    .customerPhone(request.phone())
+                    .deliveryAddress(request.fullAddress())
+                    .landmark(request.landmark())
+                    .pincode(request.pincode())
+                    .distanceKm(BigDecimal.valueOf(pricing.distanceKm()))
+                    .deliveryCharge(pricing.charge())
+                    .subtotal(subtotal)
+                    .grandTotal(grandTotal)
+                    .status(OrderStatus.PENDING)
                     .build();
-            order.addItem(orderItem);
+
+            for (LineItem lineItem : lineItems) {
+                OrderItem orderItem = OrderItem.builder()
+                        .menuItem(lineItem.menuItem())
+                        .itemName(lineItem.menuItem().getName())
+                        .itemPrice(lineItem.menuItem().getPrice())
+                        .quantity(lineItem.quantity())
+                        .subtotal(lineItem.subtotal())
+                        .build();
+                order.addItem(orderItem);
+            }
+
+            Order savedOrder = orderRepository.save(order);
+
+            Payment payment = Payment.builder()
+                    .order(savedOrder)
+                    .method(PaymentMethod.COD)
+                    .status(PaymentStatus.PENDING)
+                    .build();
+            paymentRepository.save(payment);
+
+            if (request.buyNowMenuItemId() == null) {
+                cartService.clearCart(guestId);
+            }
+
+            log.info("Order created: orderNumber={}", savedOrder.getOrderNumber());
+            return toResponse(savedOrder);
+        } catch (Exception e) {
+            log.error("Failed to create order", e);
+            throw e;
         }
-
-        Order savedOrder = orderRepository.save(order);
-
-        Payment payment = Payment.builder()
-                .order(savedOrder)
-                .method(PaymentMethod.COD)
-                .status(PaymentStatus.PENDING)
-                .build();
-        paymentRepository.save(payment);
-
-        if (request.buyNowMenuItemId() == null) {
-            cartService.clearCart(guestId);
-        }
-
-        return toResponse(savedOrder);
     }
 
     @Override
@@ -136,6 +146,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public OrderResponse trackByOrderNumber(String orderNumber) {
+        log.debug("Tracking order: orderNumber={}", orderNumber);
         Order order = orderRepository.findByOrderNumber(orderNumber)
                 .orElseThrow(() -> new ResourceNotFoundException("No order found with id: " + orderNumber));
         return toResponse(order);
@@ -148,6 +159,7 @@ public class OrderServiceImpl implements OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("No order found with id: " + orderNumber));
 
         if (order.getStatus() != OrderStatus.PENDING) {
+            log.warn("Order cancellation rejected: order is already {}", order.getStatus());
             throw new BadRequestException(
                     "This order can no longer be cancelled — it is already " + order.getStatus());
         }
@@ -157,12 +169,14 @@ public class OrderServiceImpl implements OrderService {
                 .orElse(5);
         Duration sincePlaced = Duration.between(order.getPlacedAt(), LocalDateTime.now());
         if (sincePlaced.toMinutes() >= windowMinutes) {
+            log.warn("Order cancellation rejected: cancellation window expired");
             throw new BadRequestException(
                     "The " + windowMinutes + "-minute cancellation window for this order has passed");
         }
 
         order.setStatus(OrderStatus.CANCELLED);
         Order saved = orderRepository.save(order);
+        log.info("Order cancelled: orderNumber={}", orderNumber);
         return toResponse(saved);
     }
 
@@ -187,12 +201,15 @@ public class OrderServiceImpl implements OrderService {
 
         Set<OrderStatus> allowedNextStatuses = ALLOWED_STATUS_TRANSITIONS.get(order.getStatus());
         if (!allowedNextStatuses.contains(newStatus)) {
+            log.warn("Order status update rejected: cannot change from {} to {}", order.getStatus(), newStatus);
             throw new BadRequestException(
                     "Cannot change order status from " + order.getStatus() + " to " + newStatus);
         }
 
+        OrderStatus oldStatus = order.getStatus();
         order.setStatus(newStatus);
         Order saved = orderRepository.save(order);
+        log.info("Order status updated: orderNumber={}, oldStatus={}, newStatus={}", order.getOrderNumber(), oldStatus, newStatus);
         return toResponse(saved);
     }
 

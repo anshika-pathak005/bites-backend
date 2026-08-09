@@ -14,6 +14,7 @@ import com.bites.service.AdminAuthService;
 import com.bites.util.RandomTokenGenerator;
 import com.bites.util.TokenHasher;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.LocalDateTime;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -59,18 +61,24 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     @Override
     @Transactional
     public AdminAuthResponse login(LoginRequest request) {
+        log.info("Admin login attempt for email: {}", request.email());
+
         // Step 1:
         // Try to find an admin account with this email. If none exists, we
         // deliberately show the SAME error as a wrong password below — this
         // stops an attacker from using the login form to figure out which
         // email addresses have admin accounts.
         Admin admin = adminRepository.findByEmail(request.email())
-                .orElseThrow(() -> new UnauthorizedException("Invalid email or password"));
+                .orElseThrow(() -> {
+                    log.warn("Admin login failed (email not found): {}", request.email());
+                    return new UnauthorizedException("Invalid email or password");
+                });
 
         // Step 2:
         // A deactivated admin account should not be able to log in at all,
         // even with the correct password.
         if (!admin.isActive()) {
+            log.warn("Login rejected for deactivated admin: email={}", admin.getEmail());
             throw new UnauthorizedException("This admin account has been deactivated");
         }
 
@@ -82,6 +90,7 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         // rate limit alone).
         if (admin.getLockedUntil() != null && admin.getLockedUntil().isAfter(LocalDateTime.now())) {
             long minutesLeft = Duration.between(LocalDateTime.now(), admin.getLockedUntil()).toMinutes() + 1;
+            log.warn("Login rejected for locked admin: email={}, minutesLeft={}", admin.getEmail(), minutesLeft);
             throw new UnauthorizedException(
                     "Too many failed login attempts. Please try again in " + minutesLeft + " minute(s).");
         }
@@ -92,6 +101,7 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         // threshold, locks the account for a while.
         if (!passwordEncoder.matches(request.password(), admin.getPasswordHash())) {
             registerFailedAttempt(admin);
+            log.warn("Admin login failed (incorrect password) for email: {}", admin.getEmail());
             throw new UnauthorizedException("Invalid email or password");
         }
 
@@ -103,6 +113,7 @@ public class AdminAuthServiceImpl implements AdminAuthService {
             admin.setLockedUntil(null);
             adminRepository.save(admin);
         }
+        log.info("Admin logged in successfully: email={}, role={}", admin.getEmail(), admin.getRole());
         return issueTokenPair(admin);
     }
 
@@ -113,6 +124,7 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         admin.setFailedAttempts(attempts);
         if (attempts >= MAX_FAILED_ATTEMPTS) {
             admin.setLockedUntil(LocalDateTime.now().plus(LOCKOUT_DURATION));
+            log.warn("Admin account locked due to {} consecutive failed attempts: email={}", attempts, admin.getEmail());
         }
         adminRepository.save(admin);
     }
@@ -125,12 +137,16 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         // first stored, then look up a matching, still-active row.
         String hashed = tokenHasher.hash(rawRefreshToken);
         RefreshToken storedToken = refreshTokenRepository.findByTokenAndRevokedFalse(hashed)
-                .orElseThrow(() -> new UnauthorizedException("Invalid or expired refresh token"));
+                .orElseThrow(() -> {
+                    log.warn("Admin token refresh rejected: token not found or already revoked");
+                    return new UnauthorizedException("Invalid or expired refresh token");
+                });
 
         // Step 2:
         // Even if the row exists and isn't revoked, it might simply be past
         // its expiry date — treat that the same as "invalid".
         if (storedToken.getExpiryDate().isBefore(LocalDateTime.now())) {
+            log.warn("Admin token refresh rejected: token expired for email={}", storedToken.getAdmin().getEmail());
             throw new UnauthorizedException("Invalid or expired refresh token");
         }
 
@@ -143,6 +159,7 @@ public class AdminAuthServiceImpl implements AdminAuthService {
 
         // Step 4:
         // Issue a brand new access token + refresh token pair for the same admin.
+        log.info("Admin token refreshed successfully: email={}", storedToken.getAdmin().getEmail());
         return issueTokenPair(storedToken.getAdmin());
     }
 
@@ -161,6 +178,7 @@ public class AdminAuthServiceImpl implements AdminAuthService {
             token.setRevoked(true);
             refreshTokenRepository.save(token);
         });
+        log.info("Admin logout processed");
     }
 
     // Internal helper: builds a brand new access token + refresh token pair

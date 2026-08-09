@@ -5,6 +5,7 @@ import com.bites.util.ApiResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
@@ -19,6 +20,7 @@ import java.io.IOException;
 // separate from JwtAuthenticationEntryPoint so this stays a real 403 — the
 // frontend must NOT treat this as "token expired, try a refresh", since
 // refreshing the token won't fix a permissions problem.
+@Slf4j
 @Component
 public class JwtAccessDeniedHandler implements AccessDeniedHandler {
 
@@ -33,6 +35,7 @@ public class JwtAccessDeniedHandler implements AccessDeniedHandler {
     @Override
     public void handle(HttpServletRequest request, HttpServletResponse response,
                         AccessDeniedException accessDeniedException) throws IOException {
+        log.warn("Access denied for {} {}: {}", request.getMethod(), request.getRequestURI(), accessDeniedException.getMessage());
         response.setStatus(HttpStatus.FORBIDDEN.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         ApiResponse<Void> body = ApiResponse.failure(

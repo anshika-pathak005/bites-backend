@@ -6,6 +6,7 @@ import com.bites.service.ImageUploadService;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -13,6 +14,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ImageUploadServiceImpl implements ImageUploadService {
@@ -38,11 +40,16 @@ public class ImageUploadServiceImpl implements ImageUploadService {
             throw new BadRequestException("No file was uploaded");
         }
         if (!ALLOWED_CONTENT_TYPES.contains(file.getContentType())) {
+            log.warn("Image upload rejected (unsupported content type): {}", file.getContentType());
             throw new BadRequestException("Only JPG, JPEG, PNG, and WEBP images are allowed");
         }
         if (file.getSize() > MAX_FILE_SIZE_BYTES) {
+            log.warn("Image upload rejected (file too large): size={} bytes", file.getSize());
             throw new BadRequestException("Image must be 5MB or smaller");
         }
+
+        log.info("Image upload started: filename={}, size={} bytes, contentType={}",
+                file.getOriginalFilename(), file.getSize(), file.getContentType());
 
         // Step 2:
         // Upload the raw bytes to Cloudinary and hand back its permanent,
@@ -52,8 +59,11 @@ public class ImageUploadServiceImpl implements ImageUploadService {
                     "folder", "bites",
                     "resource_type", "image"
             ));
-            return new ImageUploadResponse((String) result.get("secure_url"));
+            String secureUrl = (String) result.get("secure_url");
+            log.info("Image uploaded successfully: url={}", secureUrl);
+            return new ImageUploadResponse(secureUrl);
         } catch (IOException e) {
+            log.error("Image upload failed: filename={}", file.getOriginalFilename(), e);
             throw new BadRequestException("Failed to upload image: " + e.getMessage());
         }
     }

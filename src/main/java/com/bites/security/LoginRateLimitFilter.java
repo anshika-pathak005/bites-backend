@@ -9,6 +9,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -27,6 +28,7 @@ import java.util.concurrent.ConcurrentMap;
  * lockout in AdminAuthServiceImpl, which protects one admin account even if
  * an attacker spreads guesses across many IPs.
  */
+@Slf4j
 @Component
 public class LoginRateLimitFilter extends OncePerRequestFilter {
 
@@ -58,13 +60,15 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
-        Bucket bucket = buckets.computeIfAbsent(clientIp(request), ip -> newBucket());
+        String ip = clientIp(request);
+        Bucket bucket = buckets.computeIfAbsent(ip, k -> newBucket());
 
         if (bucket.tryConsume(1)) {
             filterChain.doFilter(request, response);
             return;
         }
 
+        log.warn("Admin login rate limit exceeded for IP: {}", ip);
         writeTooManyRequests(response);
     }
 

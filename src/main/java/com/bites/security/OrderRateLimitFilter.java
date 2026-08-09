@@ -9,6 +9,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -31,6 +32,7 @@ import java.util.regex.Pattern;
  * Same "one bucket per IP, in-memory" approach as LoginRateLimitFilter —
  * see that class for the single-instance-only caveat.
  */
+@Slf4j
 @Component
 public class OrderRateLimitFilter extends OncePerRequestFilter {
 
@@ -72,6 +74,7 @@ public class OrderRateLimitFilter extends OncePerRequestFilter {
             if (consume(trackOrCancelBuckets, ip, TRACK_OR_CANCEL_MAX_ATTEMPTS, TRACK_OR_CANCEL_WINDOW)) {
                 filterChain.doFilter(request, response);
             } else {
+                log.warn("Order tracking/cancel rate limit exceeded for IP: {}", ip);
                 writeTooManyRequests(response);
             }
             return;
@@ -81,6 +84,7 @@ public class OrderRateLimitFilter extends OncePerRequestFilter {
             if (consume(checkoutBuckets, ip, CHECKOUT_MAX_ATTEMPTS, CHECKOUT_WINDOW)) {
                 filterChain.doFilter(request, response);
             } else {
+                log.warn("Checkout rate limit exceeded for IP: {}", ip);
                 writeTooManyRequests(response);
             }
             return;

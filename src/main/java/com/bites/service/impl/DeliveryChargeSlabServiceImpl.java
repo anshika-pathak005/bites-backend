@@ -8,12 +8,14 @@ import com.bites.mapper.DeliveryChargeSlabMapper;
 import com.bites.repository.DeliveryChargeSlabRepository;
 import com.bites.service.DeliveryChargeSlabService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -39,7 +41,9 @@ public class DeliveryChargeSlabServiceImpl implements DeliveryChargeSlabService 
     @Transactional
     public DeliveryChargeSlabResponse create(DeliveryChargeSlabRequest request) {
         DeliveryChargeSlab slab = slabMapper.toEntity(request);
-        return slabMapper.toResponse(slabRepository.save(slab));
+        DeliveryChargeSlab saved = slabRepository.save(slab);
+        log.info("Delivery slab created: id={}, range={}-{}km, charge={}", saved.getId(), saved.getMinDistanceKm(), saved.getMaxDistanceKm(), saved.getCharge());
+        return slabMapper.toResponse(saved);
     }
 
     @Override
@@ -47,7 +51,9 @@ public class DeliveryChargeSlabServiceImpl implements DeliveryChargeSlabService 
     public DeliveryChargeSlabResponse update(Long id, DeliveryChargeSlabRequest request) {
         DeliveryChargeSlab slab = findEntity(id);
         slabMapper.updateEntityFromRequest(request, slab);
-        return slabMapper.toResponse(slabRepository.save(slab));
+        DeliveryChargeSlab saved = slabRepository.save(slab);
+        log.info("Delivery slab updated: id={}, range={}-{}km, charge={}", id, saved.getMinDistanceKm(), saved.getMaxDistanceKm(), saved.getCharge());
+        return slabMapper.toResponse(saved);
     }
 
     @Override
@@ -58,6 +64,7 @@ public class DeliveryChargeSlabServiceImpl implements DeliveryChargeSlabService 
         // charge/distance is ever snapshotted onto an order.
         DeliveryChargeSlab slab = findEntity(id);
         slabRepository.delete(slab);
+        log.info("Delivery slab deleted: id={}", id);
     }
 
     // Internal helper: fetches a DeliveryChargeSlab entity by id, or fails clearly if it doesn't exist.

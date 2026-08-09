@@ -5,6 +5,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
@@ -30,6 +31,7 @@ import java.util.Base64;
  * SecureRandom, so it cannot be guessed the way a phone number or a
  * frontend-generated session id could be.
  */
+@Slf4j
 @Component
 public class GuestIdentityFilter extends OncePerRequestFilter {
 
@@ -82,6 +84,9 @@ public class GuestIdentityFilter extends OncePerRequestFilter {
         // cryptographically random one.
         if (guestId == null || guestId.isBlank()) {
             guestId = generateGuestId();
+            log.debug("Minted new guest identity cookie");
+        } else {
+            log.debug("Resolved existing guest identity cookie");
         }
 
         // Step 3:

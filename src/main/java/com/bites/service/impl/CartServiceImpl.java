@@ -12,12 +12,14 @@ import com.bites.repository.CartRepository;
 import com.bites.repository.MenuItemRepository;
 import com.bites.service.CartService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -65,6 +67,7 @@ public class CartServiceImpl implements CartService {
                 .orElseThrow(() -> new ResourceNotFoundException("Menu item not found: " + menuItemId));
 
         if (!menuItem.isAvailable()) {
+            log.warn("Cannot add out-of-stock item to cart: menuItemId={}, name={}", menuItemId, menuItem.getName());
             throw new BadRequestException("This item is currently out of stock: " + menuItem.getName());
         }
 
@@ -93,6 +96,7 @@ public class CartServiceImpl implements CartService {
             cartItemRepository.save(newItem);
         }
 
+        log.info("Item added to cart: menuItemId={}, quantity={}", menuItemId, quantity);
         // Step 5:
         // Return the cart as it looks now, with the new/updated item included.
         return buildCartResponse(cart);
@@ -114,6 +118,7 @@ public class CartServiceImpl implements CartService {
                 .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + cartItemId));
 
         if (!item.getCart().getId().equals(cart.getId())) {
+            log.warn("Mismatched cart item access attempt: cartItemId={}", cartItemId);
             throw new BadRequestException("This cart item does not belong to the given cart");
         }
 
@@ -122,9 +127,11 @@ public class CartServiceImpl implements CartService {
         // the stored quantity.
         if (quantity == 0) {
             cartItemRepository.delete(item);
+            log.info("Item removed from cart: cartItemId={}", cartItemId);
         } else {
             item.setQuantity(quantity);
             cartItemRepository.save(item);
+            log.info("Cart item quantity updated: cartItemId={}, newQuantity={}", cartItemId, quantity);
         }
 
         // Step 4:
@@ -146,12 +153,13 @@ public class CartServiceImpl implements CartService {
         // Step 1:
         // Find the cart for this guest — if there isn't one, there is
         // nothing to clear, so we simply do nothing instead of throwing.
-        cartRepository.findByGuestId(guestId).ifPresent(cart ->
-                // Step 2:
-                // Delete every item that belongs to this cart (used right
-                // after an order is successfully placed).
-                cartItemRepository.deleteByCartId(cart.getId())
-        );
+        cartRepository.findByGuestId(guestId).ifPresent(cart -> {
+            // Step 2:
+            // Delete every item that belongs to this cart (used right
+            // after an order is successfully placed).
+            cartItemRepository.deleteByCartId(cart.getId());
+            log.info("Cart cleared for cartId: {}", cart.getId());
+        });
     }
 
     // Internal helper: same lookup-or-create logic as getOrCreateCart, but

@@ -8,9 +8,11 @@ import com.bites.mapper.RestaurantMapper;
 import com.bites.repository.RestaurantRepository;
 import com.bites.service.RestaurantService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -49,7 +51,9 @@ public class RestaurantServiceImpl implements RestaurantService {
 
         // Step 3:
         // Save the updated row and send back the fresh values.
-        return restaurantMapper.toResponse(restaurantRepository.save(restaurant));
+        Restaurant saved = restaurantRepository.save(restaurant);
+        log.info("Restaurant settings updated: name={}", saved.getName());
+        return restaurantMapper.toResponse(saved);
     }
 
     // Internal helper: fetches the single restaurant settings row. If this

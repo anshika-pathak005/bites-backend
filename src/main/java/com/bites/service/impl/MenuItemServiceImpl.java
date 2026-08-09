@@ -14,6 +14,7 @@ import com.bites.repository.MenuItemRepository;
 import com.bites.repository.specification.MenuItemSpecifications;
 import com.bites.service.MenuItemService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 // Handles menu items (the actual dishes) — searching/filtering them for
 // customers and admins, creating and editing them, toggling stock
 // availability, and deleting them.
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -66,7 +68,9 @@ public class MenuItemServiceImpl implements MenuItemService {
 
         // Step 3:
         // Save and return the newly created item.
-        return menuItemMapper.toResponse(menuItemRepository.save(menuItem));
+        MenuItem saved = menuItemRepository.save(menuItem);
+        log.info("Menu item created: id={}, name={}, categoryId={}", saved.getId(), saved.getName(), request.categoryId());
+        return menuItemMapper.toResponse(saved);
     }
 
     // Updates an existing menu item's fields, re-assigning its category only
@@ -88,7 +92,9 @@ public class MenuItemServiceImpl implements MenuItemService {
 
         // Step 3:
         // Save and return the updated item.
-        return menuItemMapper.toResponse(menuItemRepository.save(menuItem));
+        MenuItem saved = menuItemRepository.save(menuItem);
+        log.info("Menu item updated: id={}, name={}", id, saved.getName());
+        return menuItemMapper.toResponse(saved);
     }
 
     // Flips an item's in-stock/out-of-stock flag (used by admins to quickly
@@ -98,7 +104,9 @@ public class MenuItemServiceImpl implements MenuItemService {
     public MenuItemResponse setAvailability(Long id, boolean available) {
         MenuItem menuItem = findEntity(id);
         menuItem.setAvailable(available);
-        return menuItemMapper.toResponse(menuItemRepository.save(menuItem));
+        MenuItem saved = menuItemRepository.save(menuItem);
+        log.info("Menu item availability updated: id={}, available={}", id, available);
+        return menuItemMapper.toResponse(saved);
     }
 
     // Permanently removes a menu item.
@@ -107,6 +115,7 @@ public class MenuItemServiceImpl implements MenuItemService {
     public void delete(Long id) {
         MenuItem menuItem = findEntity(id);
         menuItemRepository.delete(menuItem);
+        log.info("Menu item deleted: id={}", id);
     }
 
     // Internal helper: fetches a MenuItem entity by id, or fails clearly if it doesn't exist.

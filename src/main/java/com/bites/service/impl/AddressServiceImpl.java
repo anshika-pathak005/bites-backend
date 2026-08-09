@@ -9,11 +9,13 @@ import com.bites.repository.CustomerAddressRepository;
 import com.bites.service.AddressService;
 import com.bites.service.DeliveryPricingService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -62,6 +64,7 @@ public class AddressServiceImpl implements AddressService {
         // Step 4:
         // Save the new address and convert it to a response before returning.
         CustomerAddress saved = customerAddressRepository.save(address);
+        log.info("Customer address added: addressId={}, isDefault={}", saved.getId(), saved.isDefault());
         return customerAddressMapper.toResponse(saved);
     }
 
@@ -105,6 +108,7 @@ public class AddressServiceImpl implements AddressService {
         // Step 5:
         // Save and convert to a response.
         CustomerAddress saved = customerAddressRepository.save(address);
+        log.info("Customer address updated: addressId={}, isDefault={}", saved.getId(), saved.isDefault());
         return customerAddressMapper.toResponse(saved);
     }
 
@@ -113,6 +117,7 @@ public class AddressServiceImpl implements AddressService {
     public void deleteAddress(String guestId, Long addressId) {
         CustomerAddress address = findOwnedAddress(guestId, addressId);
         customerAddressRepository.delete(address);
+        log.info("Customer address deleted: addressId={}", addressId);
     }
 
     // Internal helper: loads an address by id and confirms it belongs to

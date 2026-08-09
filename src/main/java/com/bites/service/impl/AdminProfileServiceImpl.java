@@ -9,10 +9,12 @@ import com.bites.exception.ResourceNotFoundException;
 import com.bites.repository.AdminRepository;
 import com.bites.service.AdminProfileService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -47,6 +49,7 @@ public class AdminProfileServiceImpl implements AdminProfileService {
         // If they're changing their email, make sure no OTHER admin account
         // already uses that new email address.
         if (!admin.getEmail().equalsIgnoreCase(request.email()) && adminRepository.existsByEmail(request.email())) {
+            log.warn("Admin profile update failed (email conflict): existing={}, requested={}", admin.getEmail(), request.email());
             throw new BadRequestException("This email is already in use by another account");
         }
 
@@ -55,6 +58,7 @@ public class AdminProfileServiceImpl implements AdminProfileService {
         admin.setName(request.name());
         admin.setEmail(request.email());
         Admin saved = adminRepository.save(admin);
+        log.info("Admin profile updated: id={}, email={}", saved.getId(), saved.getEmail());
 
         // Step 4:
         // Convert Entity -> Response DTO.
@@ -73,6 +77,7 @@ public class AdminProfileServiceImpl implements AdminProfileService {
         // change — this stops someone who found an already-open session
         // from silently locking the real owner out.
         if (!passwordEncoder.matches(request.currentPassword(), admin.getPasswordHash())) {
+            log.warn("Password change rejected (incorrect current password) for admin: {}", currentAdminEmail);
             throw new BadRequestException("Current password is incorrect");
         }
 
@@ -80,6 +85,7 @@ public class AdminProfileServiceImpl implements AdminProfileService {
         // Hash the new password (never store it as plain text) and save it.
         admin.setPasswordHash(passwordEncoder.encode(request.newPassword()));
         adminRepository.save(admin);
+        log.info("Password changed successfully for admin: {}", currentAdminEmail);
     }
 
     // Internal helper: loads an admin by email, or fails clearly if — for

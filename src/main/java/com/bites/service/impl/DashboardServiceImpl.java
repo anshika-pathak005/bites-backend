@@ -6,6 +6,7 @@ import com.bites.repository.OrderRepository;
 import com.bites.service.DashboardService;
 import com.bites.service.OrderService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +14,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -28,6 +30,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     public DashboardSummaryResponse getSummary() {
+        log.debug("Generating admin dashboard summary");
         // Step 1:
         // Work out "today" as a start-of-day to end-of-day time range, since
         // placed_at is stored as a precise timestamp, not just a date.

@@ -11,12 +11,14 @@ import com.bites.service.DeliveryPricingResult;
 import com.bites.service.DeliveryPricingService;
 import com.bites.util.HaversineUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -56,6 +58,7 @@ public class DeliveryPricingServiceImpl implements DeliveryPricingService {
         // Find the configured slab this distance falls into and use its
         // flat fee as the delivery charge.
         BigDecimal charge = resolveCharge(distanceKm);
+        log.debug("Delivery priced: distanceKm={}, charge={}", distanceKm, charge);
 
         return new DeliveryPricingResult(distanceKm, charge);
     }
@@ -71,6 +74,7 @@ public class DeliveryPricingServiceImpl implements DeliveryPricingService {
                         "Restaurant settings row is missing — check the V1__init.sql seed data"));
 
         if (restaurant.getLatitude() == null || restaurant.getLongitude() == null) {
+            log.warn("Restaurant location coordinates not configured in settings");
             throw new BadRequestException(
                     "Restaurant location is not configured yet — an admin must set it under Restaurant Settings before addresses can be validated");
         }
@@ -82,6 +86,7 @@ public class DeliveryPricingServiceImpl implements DeliveryPricingService {
     // frontend can show directly to the guest.
     private void rejectIfOutOfRange(double distanceKm) {
         if (distanceKm > MAX_DELIVERY_RADIUS_KM) {
+            log.warn("Delivery address rejected: distance {}km exceeds max delivery radius {}km", distanceKm, MAX_DELIVERY_RADIUS_KM);
             throw new AddressOutOfDeliveryRangeException(String.format(
                     "This address is %.1fkm away, which is outside our %.0fkm delivery radius",
                     distanceKm, MAX_DELIVERY_RADIUS_KM));
@@ -106,6 +111,7 @@ public class DeliveryPricingServiceImpl implements DeliveryPricingService {
         // some active slab — reaching here means the admin's slab
         // configuration has a gap, which is a setup problem, not something
         // the guest did wrong.
+        log.warn("No delivery pricing configured for distance {}km", distanceKm);
         throw new BadRequestException(
                 "No delivery pricing is configured for a " + distanceKm + "km delivery — contact support");
     }

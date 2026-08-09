@@ -2,6 +2,7 @@ package com.bites.exception;
 
 import com.bites.util.ApiError;
 import com.bites.util.ApiResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -18,12 +19,14 @@ import java.util.Map;
  * Central place that catches exceptions thrown anywhere in the app and converts them into
  * consistent JSON error responses (with the right HTTP status code) for the frontend to handle.
  */
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     // Catches ResourceNotFoundException and responds with 404 Not Found.
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNotFound(ResourceNotFoundException ex) {
+        log.warn("Resource not found: {}", ex.getMessage());
         return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
     }
 
@@ -32,18 +35,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({BadRequestException.class, DeliveryAreaNotServiceableException.class,
             AddressOutOfDeliveryRangeException.class})
     public ResponseEntity<ApiResponse<Void>> handleBadRequest(RuntimeException ex) {
+        log.warn("Bad request: {}", ex.getMessage());
         return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage());
     }
 
     // Catches UnauthorizedException and Spring Security's bad-credentials error, responding with 401 Unauthorized.
     @ExceptionHandler({UnauthorizedException.class, BadCredentialsException.class})
     public ResponseEntity<ApiResponse<Void>> handleUnauthorized(RuntimeException ex) {
+        log.warn("Unauthorized request: {}", ex.getMessage());
         return build(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", ex.getMessage());
     }
 
     // Catches Spring Security's AccessDeniedException (logged in, but not allowed) and responds with 403 Forbidden.
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Void>> handleForbidden(AccessDeniedException ex) {
+        log.warn("Access denied: {}", ex.getMessage());
         return build(HttpStatus.FORBIDDEN, "FORBIDDEN", "You do not have permission to perform this action.");
     }
 
@@ -54,6 +60,7 @@ public class GlobalExceptionHandler {
         ex.getBindingResult().getFieldErrors().forEach(fe ->
                 fieldErrors.put(fe.getField(), fe.getDefaultMessage()));
 
+        log.warn("Validation failed: {}", fieldErrors);
         ApiError error = ApiError.of("VALIDATION_ERROR", "One or more fields are invalid.", fieldErrors);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.failure(error));
     }
@@ -74,6 +81,7 @@ public class GlobalExceptionHandler {
             fieldErrors.put(field, violation.getMessage());
         });
 
+        log.warn("Constraint violation: {}", fieldErrors);
         ApiError error = ApiError.of("VALIDATION_ERROR", "One or more fields are invalid.", fieldErrors);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.failure(error));
     }
@@ -81,6 +89,7 @@ public class GlobalExceptionHandler {
     // Catch-all for any other unhandled exception, responding with 500 Internal Server Error so no stack trace leaks to the client.
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneric(Exception ex) {
+        log.error("Unhandled server exception: {}", ex.getMessage(), ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
                 "Something went wrong. Please try again shortly.");
     }
