@@ -12,9 +12,10 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 
-// Represents one saved delivery address belonging to a guest, identified
-// purely by guestId (see GuestIdentityFilter — an HttpOnly cookie, not a
-// login). Pricing is derived from latitude/longitude via
+// Represents one saved delivery address belonging to EITHER a guest,
+// identified purely by guestId (see GuestIdentityFilter — an HttpOnly
+// cookie, not a login), OR a logged-in customer, once customer login
+// exists. Pricing is derived from latitude/longitude via
 // DeliveryPricingService, not any zone reference.
 @Entity
 @Table(name = "customer_address")
@@ -26,11 +27,22 @@ import java.math.BigDecimal;
 @EqualsAndHashCode(callSuper = false)
 public class CustomerAddress extends AuditableEntity {
 
-    // Which guest (browser) this address belongs to — the actual ownership
-    // check on every address endpoint, resolved from the HttpOnly cookie,
-    // never from anything the client sends in the request body.
+    // Which guest (browser) this address was originally saved under —
+    // resolved from the HttpOnly cookie, never from anything the client
+    // sends. Stays NOT NULL (and keeps its original value) even after this
+    // address is merged into a customer account below, purely as a history
+    // trail — once customerId is set, ownership checks use customerId only
+    // (see AddressServiceImpl.findOwnedAddress), this old guestId can no
+    // longer access it.
     @Column(name = "guest_id", nullable = false, length = 64)
     private String guestId;
+
+    // The customer this address belongs to, once they're logged in — set
+    // either directly (addAddress while logged in) or via GuestMergeService
+    // when a guest with saved addresses logs in/registers. Null means this
+    // address is still guest-owned (see guestId above).
+    @Column(name = "customer_id")
+    private Long customerId;
 
     // Short name for the address, e.g. "Home", "Work".
     @Column(length = 50)

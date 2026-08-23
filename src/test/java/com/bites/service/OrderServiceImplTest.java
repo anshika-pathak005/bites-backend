@@ -44,6 +44,8 @@ class OrderServiceImplTest {
     @Mock
     private CustomerService customerService;
     @Mock
+    private CustomerRepository customerRepository;
+    @Mock
     private OrderNumberGenerator orderNumberGenerator;
 
     private OrderServiceImpl orderService;
@@ -60,6 +62,7 @@ class OrderServiceImplTest {
                 deliveryPricingService,
                 restaurantRepository,
                 customerService,
+                customerRepository,
                 orderNumberGenerator
         );
     }

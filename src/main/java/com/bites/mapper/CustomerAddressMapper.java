@@ -16,10 +16,11 @@ public interface CustomerAddressMapper {
     @Mapping(source = "default", target = "isDefault")
     CustomerAddressResponse toResponse(CustomerAddress customerAddress);
 
-    // guestId itself is left out here because the controller resolves it
-    // from the HttpOnly cookie and the service attaches it — a plain
-    // mapper has no business deciding whose address this is.
+    // guestId and customerId are both left out here because the controller/
+    // service decide whose address this is (guest cookie or logged-in
+    // customer) — a plain mapper has no business making that call.
     @Mapping(target = "guestId", ignore = true)
+    @Mapping(target = "customerId", ignore = true)
     // CustomerAddress has @Builder, and Lombok's builder method uses the
     // literal field name (isDefault(...), not default(...)) — pinned
     // explicitly here so it doesn't silently regress if the builder is removed.

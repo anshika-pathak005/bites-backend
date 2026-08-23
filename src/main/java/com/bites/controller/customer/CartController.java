@@ -3,6 +3,8 @@ package com.bites.controller.customer;
 import com.bites.dto.request.AddCartItemRequest;
 import com.bites.dto.request.UpdateCartItemRequest;
 import com.bites.dto.response.CartResponse;
+import com.bites.entity.Customer;
+import com.bites.security.CustomerContext;
 import com.bites.security.GuestContext;
 import com.bites.service.CartService;
 import com.bites.util.ApiResponse;
@@ -17,10 +19,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-// Public endpoints — no login needed. Every guest is identified purely by
-// the HttpOnly guestId cookie GuestIdentityFilter resolves on every
-// request — never a client-supplied id, and never in the URL/body, so a
-// guest can never (even accidentally) address another guest's cart.
+// Public endpoints — no login needed. A guest is identified purely by the
+// HttpOnly guestId cookie GuestIdentityFilter resolves on every request;
+// a logged-in customer is identified by their JWT instead (see
+// CustomerContext) — never a client-supplied id, and never in the URL/body,
+// so nobody can ever (even accidentally) address someone else's cart.
 @RestController
 @RequestMapping("/api/cart")
 @RequiredArgsConstructor
@@ -33,18 +36,22 @@ public class CartController {
     // Resolved once per request by GuestIdentityFilter — see GuestContext.
     private final GuestContext guestContext;
 
+    // Resolved lazily from the JWT, if any — see CustomerContext.
+    private final CustomerContext customerContext;
+
     // Fetches the current state of this browser's cart. Called when the cart
     // page loads, or when the cart icon badge needs an up-to-date item count.
     @GetMapping
     public ApiResponse<CartResponse> getCart() {
-        return ApiResponse.success(cartService.getOrCreateCart(guestContext.getGuestId()));
+        return ApiResponse.success(cartService.getOrCreateCart(currentCustomerId(), guestContext.getGuestId()));
     }
 
     // Adds a menu item to the cart (or increases its quantity if it's
-    // already there). Called when the guest clicks "Add to Cart".
+    // already there). Called when the guest/customer clicks "Add to Cart".
     @PostMapping("/items")
     public ApiResponse<CartResponse> addItem(@Valid @RequestBody AddCartItemRequest request) {
-        CartResponse cart = cartService.addItem(guestContext.getGuestId(), request.menuItemId(), request.quantity());
+        CartResponse cart = cartService.addItem(
+                currentCustomerId(), guestContext.getGuestId(), request.menuItemId(), request.quantity());
         return ApiResponse.success(cart, "Item added to cart");
     }
 
@@ -55,14 +62,20 @@ public class CartController {
             @PathVariable Long cartItemId,
             @Valid @RequestBody UpdateCartItemRequest request
     ) {
-        CartResponse cart = cartService.updateItemQuantity(guestContext.getGuestId(), cartItemId, request.quantity());
+        CartResponse cart = cartService.updateItemQuantity(
+                currentCustomerId(), guestContext.getGuestId(), cartItemId, request.quantity());
         return ApiResponse.success(cart, "Cart updated");
     }
 
     // Removes one item from the cart completely (the trash/remove icon).
     @DeleteMapping("/items/{cartItemId}")
     public ApiResponse<CartResponse> removeItem(@PathVariable Long cartItemId) {
-        CartResponse cart = cartService.removeItem(guestContext.getGuestId(), cartItemId);
+        CartResponse cart = cartService.removeItem(currentCustomerId(), guestContext.getGuestId(), cartItemId);
         return ApiResponse.success(cart, "Item removed from cart");
+    }
+
+    // Internal helper: null for a guest, the logged-in customer's id otherwise.
+    private Long currentCustomerId() {
+        return customerContext.getCurrentCustomer().map(Customer::getId).orElse(null);
     }
 }

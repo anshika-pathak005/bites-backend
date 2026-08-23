@@ -16,29 +16,39 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /*
- * Limits how many times a single IP address can hit the admin login endpoint,
- * to slow down password-guessing attacks. Each IP gets its own token bucket
- * allowing MAX_ATTEMPTS attempts per WINDOW; once a bucket is empty, further
- * attempts from that IP get an immediate 429 response without ever reaching
- * the login logic. This is separate from (and in addition to) the per-account
- * lockout in AdminAuthServiceImpl, which protects one admin account even if
- * an attacker spreads guesses across many IPs.
+ * Limits how many times a single IP address can hit a login/registration
+ * endpoint, to slow down password-guessing (and signup-spam) attacks. Each
+ * (IP, path) pair gets its own token bucket allowing MAX_ATTEMPTS attempts
+ * per WINDOW; once a bucket is empty, further attempts get an immediate 429
+ * response without ever reaching the actual login/registration logic. This
+ * is separate from (and in addition to) the per-account lockout in
+ * AdminAuthServiceImpl, which protects one admin account even if an
+ * attacker spreads guesses across many IPs.
+ *
+ * Covers both the admin login endpoint and its customer-facing counterparts
+ * (added alongside customer login/registration) — a stolen/guessed
+ * customer password is just as much a real account takeover as an admin one.
  */
 @Slf4j
 @Component
 public class LoginRateLimitFilter extends OncePerRequestFilter {
 
-    private static final String LOGIN_PATH = "/api/admin/auth/login";
+    private static final Set<String> RATE_LIMITED_PATHS = Set.of(
+            "/api/admin/auth/login",
+            "/api/customer/auth/login",
+            "/api/customer/auth/register"
+    );
     private static final int MAX_ATTEMPTS = 5;
     private static final Duration WINDOW = Duration.ofMinutes(15);
 
     private final ObjectMapper objectMapper;
 
-    // One bucket per client IP, created lazily on that IP's first request.
+    // One bucket per (client IP, path) pair, created lazily on first use.
     // In-memory is fine here since this app runs as a single instance; if it
     // is ever scaled to multiple instances, this would need to move to a
     // shared store (e.g. Redis) so limits apply across all of them.
@@ -49,31 +59,31 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
     }
 
     // Runs on every request, but only actually rate-limits POST requests to
-    // the login endpoint — everything else passes straight through.
+    // one of RATE_LIMITED_PATHS — everything else passes straight through.
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
                                      @NonNull HttpServletResponse response,
                                      @NonNull FilterChain filterChain) throws ServletException, IOException {
 
-        if (!isLoginRequest(request)) {
+        if (!isRateLimitedRequest(request)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        String ip = clientIp(request);
-        Bucket bucket = buckets.computeIfAbsent(ip, k -> newBucket());
+        String key = clientIp(request) + ":" + request.getRequestURI();
+        Bucket bucket = buckets.computeIfAbsent(key, k -> newBucket());
 
         if (bucket.tryConsume(1)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        log.warn("Admin login rate limit exceeded for IP: {}", ip);
+        log.warn("Login/registration rate limit exceeded for {}", key);
         writeTooManyRequests(response);
     }
 
-    private boolean isLoginRequest(HttpServletRequest request) {
-        return "POST".equalsIgnoreCase(request.getMethod()) && LOGIN_PATH.equals(request.getRequestURI());
+    private boolean isRateLimitedRequest(HttpServletRequest request) {
+        return "POST".equalsIgnoreCase(request.getMethod()) && RATE_LIMITED_PATHS.contains(request.getRequestURI());
     }
 
     // Prefers the X-Forwarded-For header (set by a reverse proxy/load
@@ -88,7 +98,7 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
     }
 
     // Builds a fresh bucket allowing MAX_ATTEMPTS tokens, refilled fully
-    // every WINDOW — i.e. at most MAX_ATTEMPTS login attempts per WINDOW.
+    // every WINDOW — i.e. at most MAX_ATTEMPTS attempts per WINDOW.
     private Bucket newBucket() {
         Bandwidth limit = Bandwidth.builder()
                 .capacity(MAX_ATTEMPTS)
@@ -103,7 +113,7 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
         response.setStatus(429);
         response.setContentType("application/json");
         ApiResponse<Void> body = ApiResponse.failure(
-                ApiError.of("TOO_MANY_REQUESTS", "Too many login attempts from this network. Please try again later."));
+                ApiError.of("TOO_MANY_REQUESTS", "Too many attempts from this network. Please try again later."));
         objectMapper.writeValue(response.getWriter(), body);
     }
 }

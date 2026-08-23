@@ -27,6 +27,15 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     // browser (guestId, from the HttpOnly cookie), newest first.
     List<Order> findByGuestIdOrderByPlacedAtDesc(String guestId);
 
+    // Same "My Orders" list, but for a logged-in customer — every order
+    // ever linked to their customer_id (see Order.customer), newest first.
+    // Reliable across devices/browsers, unlike the guestId version above.
+    List<Order> findByCustomer_IdOrderByPlacedAtDesc(Long customerId);
+
+    // Used by RecommendationService — just this customer's single most
+    // recent order, to base "you might also like" suggestions on.
+    Optional<Order> findFirstByCustomer_IdOrderByPlacedAtDesc(Long customerId);
+
     // Used by the admin dashboard's "Pending Orders" count card.
     long countByStatus(OrderStatus status);
 

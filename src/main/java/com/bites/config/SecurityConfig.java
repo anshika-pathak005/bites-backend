@@ -99,12 +99,20 @@ public class SecurityConfig {
                                 "/api/addresses/**",
                                 "/api/delivery-pricing/**", // GET quote — public, read-only preview of the delivery charge
                                 "/api/orders/track/**",
-                                "/api/orders", // POST checkout, GET list-mine — guest, cookie-scoped inside the service
+                                "/api/orders", // POST checkout, GET list-mine — guest OR logged-in customer, resolved inside the service
                                 "/api/orders/*/cancel", // POST cancel — guest, order-number is the credential
                                 "/api/restaurant",
                                 "/api/admin/auth/**",
+                                "/api/customer/auth/register",
+                                "/api/customer/auth/login",
+                                "/api/customer/auth/refresh",
+                                "/api/customer/auth/logout",
                                 "/docs/**", "/api-docs/**", "/swagger-ui/**"
                         ).permitAll()
+                        // Login-only customer endpoints: a valid CUSTOMER-role access
+                        // token is required, not just any authenticated caller.
+                        .requestMatchers("/api/customer/auth/me", "/api/customer/recommendations")
+                        .hasRole("CUSTOMER")
                         // Everything else under /api/admin/** requires a valid admin JWT
                         .requestMatchers("/api/admin/**").authenticated()
                         .anyRequest().authenticated()

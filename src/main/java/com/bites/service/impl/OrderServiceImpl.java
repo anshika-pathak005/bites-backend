@@ -20,6 +20,7 @@ import com.bites.exception.BadRequestException;
 import com.bites.exception.ResourceNotFoundException;
 import com.bites.repository.CartItemRepository;
 import com.bites.repository.CartRepository;
+import com.bites.repository.CustomerRepository;
 import com.bites.repository.MenuItemRepository;
 import com.bites.repository.OrderRepository;
 import com.bites.repository.PaymentRepository;
@@ -61,6 +62,7 @@ public class OrderServiceImpl implements OrderService {
     private final DeliveryPricingService deliveryPricingService;
     private final RestaurantRepository restaurantRepository;
     private final CustomerService customerService;
+    private final CustomerRepository customerRepository;
     private final OrderNumberGenerator orderNumberGenerator;
 
     private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_STATUS_TRANSITIONS = Map.of(
@@ -74,15 +76,22 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public OrderResponse checkout(String guestId, CheckoutRequest request) {
+    public OrderResponse checkout(Long customerId, String guestId, CheckoutRequest request) {
         log.info("Creating order");
 
         try {
-            List<LineItem> lineItems = resolveLineItems(guestId, request);
+            List<LineItem> lineItems = resolveLineItems(customerId, guestId, request);
 
             DeliveryPricingResult pricing = deliveryPricingService.priceDelivery(request.latitude(), request.longitude());
 
-            Customer customer = customerService.findOrCreateByPhone(request.name(), request.phone());
+            // Logged-in caller: link the order straight to their own
+            // account instead of looking one up/creating one by phone —
+            // avoids ever creating a second, disconnected Customer row for
+            // someone who already has a real account.
+            Customer customer = customerId != null
+                    ? customerRepository.findById(customerId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + customerId))
+                    : customerService.findOrCreateByPhone(request.name(), request.phone());
 
             BigDecimal subtotal = lineItems.stream()
                     .map(LineItem::subtotal)
@@ -126,7 +135,7 @@ public class OrderServiceImpl implements OrderService {
             paymentRepository.save(payment);
 
             if (request.buyNowMenuItemId() == null) {
-                cartService.clearCart(guestId);
+                cartService.clearCart(customerId, guestId);
             }
 
             log.info("Order created: orderNumber={}", savedOrder.getOrderNumber());
@@ -138,8 +147,11 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public List<OrderResponse> listForGuest(String guestId) {
-        return orderRepository.findByGuestIdOrderByPlacedAtDesc(guestId).stream()
+    public List<OrderResponse> listMine(Long customerId, String guestId) {
+        List<Order> orders = customerId != null
+                ? orderRepository.findByCustomer_IdOrderByPlacedAtDesc(customerId)
+                : orderRepository.findByGuestIdOrderByPlacedAtDesc(guestId);
+        return orders.stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -264,15 +276,15 @@ public class OrderServiceImpl implements OrderService {
         return sincePlaced.toMinutes() < windowMinutes;
     }
 
-    private List<LineItem> resolveLineItems(String guestId, CheckoutRequest request) {
+    private List<LineItem> resolveLineItems(Long customerId, String guestId, CheckoutRequest request) {
         if (request.buyNowMenuItemId() != null) {
             return resolveBuyNowLineItems(request.buyNowMenuItemId(), request.buyNowQuantity());
         }
-        return resolveCartFlowLineItems(guestId);
+        return resolveCartFlowLineItems(customerId, guestId);
     }
 
-    private List<LineItem> resolveCartFlowLineItems(String guestId) {
-        Cart cart = cartRepository.findByGuestId(guestId)
+    private List<LineItem> resolveCartFlowLineItems(Long customerId, String guestId) {
+        Cart cart = (customerId != null ? cartRepository.findByCustomerId(customerId) : cartRepository.findByGuestId(guestId))
                 .orElseThrow(() -> new BadRequestException("No cart found for this guest"));
 
         List<CartItem> cartItems = cartItemRepository.findByCartId(cart.getId());

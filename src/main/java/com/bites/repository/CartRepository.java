@@ -9,4 +9,6 @@ import java.util.Optional;
 public interface CartRepository extends JpaRepository<Cart, Long> {
     // Used to find this browser's cart by its guestId (from the HttpOnly cookie).
     Optional<Cart> findByGuestId(String guestId);
+    // Used to find a logged-in customer's cart instead, once they're authenticated.
+    Optional<Cart> findByCustomerId(Long customerId);
 }

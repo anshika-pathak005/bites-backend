@@ -32,16 +32,17 @@ public class AddressServiceImpl implements AddressService {
     private final CustomerAddressMapper customerAddressMapper;
 
     @Override
-    public List<CustomerAddressResponse> getAddresses(String guestId) {
+    public List<CustomerAddressResponse> getAddresses(Long customerId, String guestId) {
         // Default address first, so the frontend can pre-select it without sorting client-side.
-        return customerAddressRepository.findByGuestIdOrderByIsDefaultDesc(guestId).stream()
-                .map(customerAddressMapper::toResponse)
-                .toList();
+        List<CustomerAddress> addresses = customerId != null
+                ? customerAddressRepository.findByCustomerIdOrderByIsDefaultDesc(customerId)
+                : customerAddressRepository.findByGuestIdAndCustomerIdIsNullOrderByIsDefaultDesc(guestId);
+        return addresses.stream().map(customerAddressMapper::toResponse).toList();
     }
 
     @Override
     @Transactional
-    public CustomerAddressResponse addAddress(String guestId, CustomerAddressRequest request) {
+    public CustomerAddressResponse addAddress(Long customerId, String guestId, CustomerAddressRequest request) {
         // Step 1:
         // Reject the address outright if it's further than 8km from the
         // restaurant — delegated to DeliveryPricingService so this exact
@@ -49,16 +50,23 @@ public class AddressServiceImpl implements AddressService {
         deliveryPricingService.validateWithinDeliveryRadius(request.latitude(), request.longitude());
 
         // Step 2:
-        // Build the address entity from the request and attach it to this guest.
+        // Build the address entity from the request and attach it to
+        // whoever is calling — the logged-in customer if there is one,
+        // otherwise the guest. guestId is always stored regardless (the
+        // column is NOT NULL, and it's a harmless history trail even once
+        // customerId is also set — see CustomerAddress).
         CustomerAddress address = customerAddressMapper.toEntity(request);
         address.setGuestId(guestId);
+        if (customerId != null) {
+            address.setCustomerId(customerId);
+        }
 
         // Step 3:
         // If this is being saved as the default address, unset the flag on
-        // every other address this guest has first — only one address
+        // every other address this caller has first — only one address
         // should ever be marked default at a time.
         if (request.isDefault()) {
-            clearExistingDefault(guestId);
+            clearExistingDefault(customerId, guestId);
         }
 
         // Step 4:
@@ -70,12 +78,12 @@ public class AddressServiceImpl implements AddressService {
 
     @Override
     @Transactional
-    public CustomerAddressResponse updateAddress(String guestId, Long addressId, CustomerAddressRequest request) {
+    public CustomerAddressResponse updateAddress(Long customerId, String guestId, Long addressId, CustomerAddressRequest request) {
         // Step 1:
-        // Load the address and make sure it actually belongs to this guest
-        // — without this check, one guest could edit another guest's saved
-        // address just by guessing an address id.
-        CustomerAddress address = findOwnedAddress(guestId, addressId);
+        // Load the address and make sure it actually belongs to this
+        // caller — without this check, someone could edit someone else's
+        // saved address just by guessing an address id.
+        CustomerAddress address = findOwnedAddress(customerId, guestId, addressId);
 
         // Step 2:
         // Only re-run the 8km radius check if the coordinates actually
@@ -101,7 +109,7 @@ public class AddressServiceImpl implements AddressService {
         // Step 4:
         // Same "only one default at a time" rule as addAddress.
         if (request.isDefault() && !address.isDefault()) {
-            clearExistingDefault(guestId);
+            clearExistingDefault(customerId, guestId);
         }
         address.setDefault(request.isDefault());
 
@@ -114,30 +122,38 @@ public class AddressServiceImpl implements AddressService {
 
     @Override
     @Transactional
-    public void deleteAddress(String guestId, Long addressId) {
-        CustomerAddress address = findOwnedAddress(guestId, addressId);
+    public void deleteAddress(Long customerId, String guestId, Long addressId) {
+        CustomerAddress address = findOwnedAddress(customerId, guestId, addressId);
         customerAddressRepository.delete(address);
         log.info("Customer address deleted: addressId={}", addressId);
     }
 
     // Internal helper: loads an address by id and confirms it belongs to
-    // this guest, or fails clearly (404, not "wrong owner" — never leak
-    // whether an address id exists for a different guest).
-    private CustomerAddress findOwnedAddress(String guestId, Long addressId) {
+    // this caller, or fails clearly (404, not "wrong owner" — never leak
+    // whether an address id exists for someone else). Once an address has
+    // been merged into a customer account (customerId set), its original
+    // guestId can no longer reach it — only customerId can, from then on.
+    private CustomerAddress findOwnedAddress(Long customerId, String guestId, Long addressId) {
         CustomerAddress address = customerAddressRepository.findById(addressId)
                 .orElseThrow(() -> new ResourceNotFoundException("Address not found: " + addressId));
 
-        if (!address.getGuestId().equals(guestId)) {
+        boolean owned = customerId != null
+                ? customerId.equals(address.getCustomerId())
+                : address.getCustomerId() == null && guestId.equals(address.getGuestId());
+
+        if (!owned) {
             throw new ResourceNotFoundException("Address not found: " + addressId);
         }
         return address;
     }
 
-    // Internal helper: unsets isDefault on every address this guest
+    // Internal helper: unsets isDefault on every address this caller
     // currently has, so a new default can be applied without ever ending up
     // with two "default" addresses at once.
-    private void clearExistingDefault(String guestId) {
-        List<CustomerAddress> existing = customerAddressRepository.findByGuestIdAndIsDefaultTrue(guestId);
+    private void clearExistingDefault(Long customerId, String guestId) {
+        List<CustomerAddress> existing = customerId != null
+                ? customerAddressRepository.findByCustomerIdAndIsDefaultTrue(customerId)
+                : customerAddressRepository.findByGuestIdAndCustomerIdIsNullAndIsDefaultTrue(guestId);
         existing.forEach(a -> a.setDefault(false));
         customerAddressRepository.saveAll(existing);
     }
