@@ -45,7 +45,7 @@ public class AddressController {
         return ApiResponse.success(addressService.getAddresses(currentCustomerId(), guestContext.getGuestId()));
     }
 
-    // Saves a brand new address. Validates the 8km radius (Haversine,
+    // Saves a brand new address. Validates the configured delivery radius (Haversine,
     // against the restaurant's coordinates) before saving.
     @PostMapping
     public ApiResponse<CustomerAddressResponse> addAddress(@Valid @RequestBody CustomerAddressRequest request) {

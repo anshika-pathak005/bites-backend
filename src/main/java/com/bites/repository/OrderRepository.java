@@ -52,4 +52,15 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     @Query("SELECT COALESCE(SUM(o.grandTotal), 0) FROM Order o " +
            "WHERE o.placedAt BETWEEN :start AND :end AND o.status <> com.bites.entity.enums.OrderStatus.CANCELLED")
     BigDecimal sumRevenueBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    // Used by the admin "Customers" screen to show Orders / Total Spent /
+    // Last Order per row without an N+1 query per customer. Cancelled
+    // orders count toward ordersCount (they did place them) but are
+    // excluded from totalSpent, matching sumRevenueBetween's convention.
+    @Query("SELECT o.customer.id AS customerId, " +
+           "COUNT(o) AS ordersCount, " +
+           "COALESCE(SUM(CASE WHEN o.status <> com.bites.entity.enums.OrderStatus.CANCELLED THEN o.grandTotal ELSE 0 END), 0) AS totalSpent, " +
+           "MAX(o.placedAt) AS lastOrderAt " +
+           "FROM Order o GROUP BY o.customer.id")
+    List<CustomerOrderStatsProjection> findOrderStatsGroupedByCustomer();
 }

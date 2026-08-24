@@ -4,14 +4,21 @@ import com.bites.dto.response.CustomerResponse;
 import com.bites.entity.Customer;
 import com.bites.exception.ResourceNotFoundException;
 import com.bites.mapper.CustomerMapper;
+import com.bites.repository.CustomerOrderStatsProjection;
 import com.bites.repository.CustomerRepository;
+import com.bites.repository.OrderRepository;
 import com.bites.service.CustomerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -25,6 +32,10 @@ public class CustomerServiceImpl implements CustomerService {
 
     // Converts Customer entity -> CustomerResponse DTO.
     private final CustomerMapper customerMapper;
+
+    // Used to compute the Orders / Total Spent / Last Order columns on the
+    // admin "Customers" screen.
+    private final OrderRepository orderRepository;
 
     @Override
     @Transactional
@@ -51,10 +62,21 @@ public class CustomerServiceImpl implements CustomerService {
     public List<CustomerResponse> getAllForAdmin() {
         // Step 1:
         // Load every customer row from the database.
+        List<Customer> customers = customerRepository.findAll();
+
         // Step 2:
-        // Convert each one into a CustomerResponse before sending it out.
-        return customerRepository.findAll().stream()
-                .map(customerMapper::toResponse)
+        // Load Orders/Total Spent/Last Order for every customer in one
+        // grouped query instead of hitting the orders table per row.
+        Map<Long, CustomerOrderStatsProjection> statsByCustomerId = orderRepository.findOrderStatsGroupedByCustomer()
+                .stream()
+                .collect(Collectors.toMap(CustomerOrderStatsProjection::getCustomerId, Function.identity()));
+
+        // Step 3:
+        // Convert each customer into a CustomerResponse, filling in its
+        // stats if it has placed at least one order (defaults to 0/null
+        // otherwise, e.g. a customer row created but never checked out).
+        return customers.stream()
+                .map(customer -> enrich(customer, statsByCustomerId.get(customer.getId())))
                 .toList();
     }
 
@@ -66,7 +88,35 @@ public class CustomerServiceImpl implements CustomerService {
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + id));
 
         // Step 2:
-        // Convert Entity -> Response DTO.
-        return customerMapper.toResponse(customer);
+        // Look up this one customer's order stats — reuses the same grouped
+        // query rather than adding a separate single-customer query, since
+        // this is an admin detail screen (not a hot path).
+        CustomerOrderStatsProjection stats = orderRepository.findOrderStatsGroupedByCustomer().stream()
+                .filter(row -> row.getCustomerId().equals(id))
+                .findFirst()
+                .orElse(null);
+
+        return enrich(customer, stats);
+    }
+
+    // Combines the base entity fields (via CustomerMapper) with the
+    // computed order stats (nullable — a customer may have zero orders) to
+    // produce the final CustomerResponse for the admin "Customers" screen.
+    private CustomerResponse enrich(Customer customer, CustomerOrderStatsProjection stats) {
+        CustomerResponse base = customerMapper.toResponse(customer);
+        long ordersCount = stats != null ? stats.getOrdersCount() : 0L;
+        BigDecimal totalSpent = stats != null ? stats.getTotalSpent() : BigDecimal.ZERO;
+        LocalDateTime lastOrderAt = stats != null ? stats.getLastOrderAt() : null;
+
+        return new CustomerResponse(
+                base.id(),
+                base.name(),
+                base.phone(),
+                base.email(),
+                ordersCount,
+                totalSpent,
+                lastOrderAt,
+                base.joinedAt()
+        );
     }
 }

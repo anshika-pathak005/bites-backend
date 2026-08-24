@@ -30,7 +30,7 @@ public class DeliveryPricingController {
 
     // e.g. GET /api/delivery-pricing/quote?latitude=26.202684&longitude=82.959007
     // Returns the same AddressOutOfDeliveryRangeException-driven 400 as
-    // checkout/address-save if the point is outside the 8km radius, so the
+    // checkout/address-save if the point is outside the configured delivery radius, so the
     // checkout page can show the same "too far away" message up front.
     @GetMapping("/quote")
     public ApiResponse<DeliveryQuoteResponse> quote(

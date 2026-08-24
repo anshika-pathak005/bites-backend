@@ -65,7 +65,7 @@ public class CustomerAddress extends AuditableEntity {
     // this field existed don't break; the frontend must always send both
     // when creating/editing an address going forward (see
     // CustomerAddressRequest validation) — this is what
-    // DeliveryPricingService uses to validate the 8km radius and, at
+    // DeliveryPricingService uses to validate the configured delivery radius and, at
     // checkout, to work out the delivery charge.
     @Column(precision = 10, scale = 7)
     private BigDecimal latitude;

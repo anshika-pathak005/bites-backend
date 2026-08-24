@@ -63,6 +63,12 @@ public class Restaurant extends AuditableEntity {
     @Column(name = "cancellation_window_minutes", nullable = false)
     private int cancellationWindowMinutes;
 
+    // Max straight-line distance (km) from the restaurant that a delivery
+    // address can be at — see DeliveryPricingServiceImpl. Admin-configurable
+    // so widening/narrowing the delivery area doesn't need a deploy.
+    @Column(name = "max_delivery_radius_km", nullable = false, precision = 4, scale = 2)
+    private BigDecimal maxDeliveryRadiusKm;
+
     // Daily time the restaurant starts accepting orders.
     @Column(name = "opening_time")
     private LocalTime openingTime;

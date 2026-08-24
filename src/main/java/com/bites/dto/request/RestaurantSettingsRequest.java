@@ -27,10 +27,11 @@ public record RestaurantSettingsRequest(
         String address,
 
         // Restaurant's own coordinates — the fixed point every guest
-        // address's delivery distance (Haversine, 8km radius) is measured
-        // from. Optional so existing settings can still be saved before an
-        // admin gets round to pinning the exact location; radius validation
-        // simply stays disabled until both are set.
+        // address's delivery distance (Haversine, maxDeliveryRadiusKm
+        // below) is measured from. Optional so existing settings can still
+        // be saved before an admin gets round to pinning the exact
+        // location; radius validation simply stays disabled until both are
+        // set.
         @DecimalMin(value = "-90.0", message = "Latitude must be between -90 and 90")
         @DecimalMax(value = "90.0", message = "Latitude must be between -90 and 90")
         BigDecimal latitude,
@@ -43,6 +44,15 @@ public record RestaurantSettingsRequest(
         // themselves (only while it's still PENDING). e.g. 5.
         @jakarta.validation.constraints.Min(value = 1, message = "Cancellation window must be at least 1 minute")
         int cancellationWindowMinutes,
+
+        // Max straight-line distance (km) a delivery address can be from
+        // the restaurant — was a hardcoded 8km constant, now editable here.
+        // Should stay >= the highest active DeliveryChargeSlab's max, or
+        // checkout will reject addresses no slab can price (see
+        // DeliveryPricingServiceImpl.resolveCharge).
+        @NotNull(message = "Max delivery radius is required")
+        @DecimalMin(value = "0.1", message = "Max delivery radius must be greater than 0")
+        BigDecimal maxDeliveryRadiusKm,
 
         @NotNull(message = "Opening time is required")
         LocalTime openingTime,

@@ -24,7 +24,7 @@ public class AddressServiceImpl implements AddressService {
     // Used to load and save saved addresses.
     private final CustomerAddressRepository customerAddressRepository;
 
-    // Used to enforce the 8km delivery radius against the restaurant's
+    // Used to enforce the configured delivery radius against the restaurant's
     // coordinates whenever an address is saved or edited.
     private final DeliveryPricingService deliveryPricingService;
 
@@ -44,7 +44,7 @@ public class AddressServiceImpl implements AddressService {
     @Transactional
     public CustomerAddressResponse addAddress(Long customerId, String guestId, CustomerAddressRequest request) {
         // Step 1:
-        // Reject the address outright if it's further than 8km from the
+        // Reject the address outright if it's further than the configured max radius from the
         // restaurant — delegated to DeliveryPricingService so this exact
         // rule can never drift from what checkout itself enforces.
         deliveryPricingService.validateWithinDeliveryRadius(request.latitude(), request.longitude());
@@ -86,7 +86,7 @@ public class AddressServiceImpl implements AddressService {
         CustomerAddress address = findOwnedAddress(customerId, guestId, addressId);
 
         // Step 2:
-        // Only re-run the 8km radius check if the coordinates actually
+        // Only re-run the configured delivery radius check if the coordinates actually
         // changed — re-validating identical coordinates would just waste a
         // calculation, but this still catches every real edit (dragging the
         // map pin, re-geocoding a manually edited address, etc.).

@@ -33,7 +33,7 @@ public class DeliveryChargeSlab extends AuditableEntity {
     private BigDecimal minDistanceKm;
 
     // Inclusive upper bound of this slab's distance range, in kilometers.
-    // The restaurant's max delivery radius (8km, enforced in
+    // The restaurant's max delivery radius (admin-configurable, enforced in
     // DeliveryPricingServiceImpl) should always be <= the highest slab's max.
     @Column(name = "max_distance_km", nullable = false, precision = 4, scale = 2)
     private BigDecimal maxDistanceKm;

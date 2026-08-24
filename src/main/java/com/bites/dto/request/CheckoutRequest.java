@@ -38,7 +38,7 @@ public record CheckoutRequest(
         // Optional — not required for pricing/validation (that uses lat/lng).
         String pincode,
 
-        // Required — the backend validates the 8km delivery radius and
+        // Required — the backend validates the configured delivery radius and
         // resolves the delivery charge from these coordinates. Should be
         // whatever the guest's chosen/saved address already has (see
         // CustomerAddressResponse), or freshly geocoded if they typed a

@@ -21,7 +21,7 @@ public interface AddressService {
     CustomerAddressResponse addAddress(Long customerId, String guestId, CustomerAddressRequest request);
 
     // Updates an existing saved address belonging to this caller. If the
-    // coordinates changed, the 8km delivery radius is re-validated exactly
+    // coordinates changed, the configured delivery radius is re-validated exactly
     // like a brand new address.
     CustomerAddressResponse updateAddress(Long customerId, String guestId, Long addressId, CustomerAddressRequest request);
 

@@ -24,15 +24,10 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class DeliveryPricingServiceImpl implements DeliveryPricingService {
 
-    // The restaurant's maximum delivery radius, in kilometers. Any address
-    // further than this from the restaurant's coordinates is rejected —
-    // matches the highest configured slab's max, but enforced independently
-    // here so an admin fat-fingering the slabs can't silently widen the
-    // actual delivery radius.
-    private static final double MAX_DELIVERY_RADIUS_KM = 8.0;
-
     // Used to read the restaurant's own coordinates — the fixed point every
-    // address's delivery distance is measured against.
+    // address's delivery distance is measured against. Also now the source
+    // of the max delivery radius itself (admin-configurable, see
+    // Restaurant.maxDeliveryRadiusKm) — no more hardcoded constant here.
     private final RestaurantRepository restaurantRepository;
 
     // Used to look up the configured distance -> charge slabs.
@@ -40,8 +35,9 @@ public class DeliveryPricingServiceImpl implements DeliveryPricingService {
 
     @Override
     public double validateWithinDeliveryRadius(BigDecimal latitude, BigDecimal longitude) {
-        double distanceKm = distanceFromRestaurant(latitude, longitude);
-        rejectIfOutOfRange(distanceKm);
+        Restaurant restaurant = getRestaurant();
+        double distanceKm = distanceFromRestaurant(restaurant, latitude, longitude);
+        rejectIfOutOfRange(distanceKm, restaurant.getMaxDeliveryRadiusKm());
         return distanceKm;
     }
 
@@ -51,8 +47,9 @@ public class DeliveryPricingServiceImpl implements DeliveryPricingService {
         // Work out how far away this point is, and reject it outright if
         // it's outside the delivery radius — never price an order we can't
         // actually deliver.
-        double distanceKm = distanceFromRestaurant(latitude, longitude);
-        rejectIfOutOfRange(distanceKm);
+        Restaurant restaurant = getRestaurant();
+        double distanceKm = distanceFromRestaurant(restaurant, latitude, longitude);
+        rejectIfOutOfRange(distanceKm, restaurant.getMaxDeliveryRadiusKm());
 
         // Step 2:
         // Find the configured slab this distance falls into and use its
@@ -63,16 +60,20 @@ public class DeliveryPricingServiceImpl implements DeliveryPricingService {
         return new DeliveryPricingResult(distanceKm, charge);
     }
 
+    // Internal helper: fetches the single Restaurant settings row. Fails
+    // loudly if it's missing (should never happen past the V1 seed).
+    private Restaurant getRestaurant() {
+        return restaurantRepository.findAll().stream().findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Restaurant settings row is missing — check the V1__init.sql seed data"));
+    }
+
     // Internal helper: Haversine distance between the restaurant's fixed
     // coordinates and the given point. Fails loudly (not silently) if the
     // restaurant's coordinates haven't been configured yet — unlike the
     // old zone-based system, distance is now the ONLY thing pricing is
     // based on, so we can't just skip the check here.
-    private double distanceFromRestaurant(BigDecimal latitude, BigDecimal longitude) {
-        Restaurant restaurant = restaurantRepository.findAll().stream().findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Restaurant settings row is missing — check the V1__init.sql seed data"));
-
+    private double distanceFromRestaurant(Restaurant restaurant, BigDecimal latitude, BigDecimal longitude) {
         if (restaurant.getLatitude() == null || restaurant.getLongitude() == null) {
             log.warn("Restaurant location coordinates not configured in settings");
             throw new BadRequestException(
@@ -82,14 +83,16 @@ public class DeliveryPricingServiceImpl implements DeliveryPricingService {
         return HaversineUtil.distanceInKm(restaurant.getLatitude(), restaurant.getLongitude(), latitude, longitude);
     }
 
-    // Internal helper: the actual 8km cutoff check, with a message the
-    // frontend can show directly to the guest.
-    private void rejectIfOutOfRange(double distanceKm) {
-        if (distanceKm > MAX_DELIVERY_RADIUS_KM) {
-            log.warn("Delivery address rejected: distance {}km exceeds max delivery radius {}km", distanceKm, MAX_DELIVERY_RADIUS_KM);
+    // Internal helper: the actual delivery-radius cutoff check, with a
+    // message the frontend can show directly to the guest. maxRadiusKm now
+    // comes from Restaurant.maxDeliveryRadiusKm (admin-editable on the
+    // Settings screen) instead of a hardcoded constant.
+    private void rejectIfOutOfRange(double distanceKm, BigDecimal maxRadiusKm) {
+        if (distanceKm > maxRadiusKm.doubleValue()) {
+            log.warn("Delivery address rejected: distance {}km exceeds max delivery radius {}km", distanceKm, maxRadiusKm);
             throw new AddressOutOfDeliveryRangeException(String.format(
                     "This address is %.1fkm away, which is outside our %.0fkm delivery radius",
-                    distanceKm, MAX_DELIVERY_RADIUS_KM));
+                    distanceKm, maxRadiusKm));
         }
     }
 
@@ -107,10 +110,10 @@ public class DeliveryPricingServiceImpl implements DeliveryPricingService {
             }
         }
 
-        // Every distance up to MAX_DELIVERY_RADIUS_KM should be covered by
-        // some active slab — reaching here means the admin's slab
-        // configuration has a gap, which is a setup problem, not something
-        // the guest did wrong.
+        // Every distance up to the restaurant's configured max radius
+        // should be covered by some active slab — reaching here means the
+        // admin's slab configuration has a gap, which is a setup problem,
+        // not something the guest did wrong.
         log.warn("No delivery pricing configured for distance {}km", distanceKm);
         throw new BadRequestException(
                 "No delivery pricing is configured for a " + distanceKm + "km delivery — contact support");

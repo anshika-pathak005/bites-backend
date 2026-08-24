@@ -10,7 +10,7 @@ import java.math.BigDecimal;
 public interface DeliveryPricingService {
 
     // Throws AddressOutOfDeliveryRangeException if the given point is
-    // further than the restaurant's max delivery radius (8km). Used when a
+    // further than the restaurant's max delivery radius (admin-configurable). Used when a
     // customer just saves/edits an address, where only serviceability
     // matters, not the price.
     double validateWithinDeliveryRadius(BigDecimal latitude, BigDecimal longitude);

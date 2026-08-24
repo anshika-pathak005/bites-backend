@@ -15,13 +15,17 @@ public record RestaurantSettingsResponse(
         String address,
 
         // Restaurant's own coordinates, used as the origin point for the
-        // 8km delivery-radius check on guest addresses. Null until an admin
-        // sets them on the Settings screen.
+        // delivery-radius check on guest addresses (see maxDeliveryRadiusKm
+        // below). Null until an admin sets them on the Settings screen.
         BigDecimal latitude,
         BigDecimal longitude,
 
         // Minutes after placedAt a guest can still self-cancel a PENDING order.
         int cancellationWindowMinutes,
+
+        // Max delivery distance (km) from the restaurant — was hardcoded as
+        // 8km, now admin-editable here instead.
+        BigDecimal maxDeliveryRadiusKm,
 
         LocalTime openingTime,
         LocalTime closingTime,

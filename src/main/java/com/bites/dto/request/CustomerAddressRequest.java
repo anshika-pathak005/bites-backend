@@ -31,7 +31,7 @@ public record CustomerAddressRequest(
         // Required — either taken straight from the browser's Geolocation
         // API (current-location flow) or produced by geocoding the typed
         // address on the frontend (manual-entry flow). This is the ONLY
-        // thing the backend uses to validate the 8km delivery radius.
+        // thing the backend uses to validate the configured delivery radius.
         @NotNull(message = "Latitude is required")
         @DecimalMin(value = "-90.0", message = "Latitude must be between -90 and 90")
         @DecimalMax(value = "90.0", message = "Latitude must be between -90 and 90")
