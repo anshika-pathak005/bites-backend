@@ -5,18 +5,13 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseCookie;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.util.Base64;
 
 /*
  * Resolves the current visitor's identity for every request, WITHOUT any
@@ -30,45 +25,25 @@ import java.util.Base64;
  * XSS-can-steal-your-cart-id class of bug) and its value is 256 bits of
  * SecureRandom, so it cannot be guessed the way a phone number or a
  * frontend-generated session id could be.
+ *
+ * Cookie read/write itself lives in GuestCookieService, shared with
+ * CustomerAuthController — see that class for why the guestId is
+ * explicitly ROTATED (not just renewed) right after login/register/logout,
+ * instead of being renewed forever by this filter alone.
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class GuestIdentityFilter extends OncePerRequestFilter {
 
     private static final String COOKIE_NAME = "guestId";
-
-    // ~9 months. Slid forward on every request (see below) so an actively
-    // returning guest effectively never "loses" their identity.
-    private static final Duration COOKIE_MAX_AGE = Duration.ofDays(270);
-
-    private final SecureRandom secureRandom = new SecureRandom();
 
     // Populated with the resolved guestId for this request so downstream
     // services (cart/address/order) can read it without a cookie/header
     // parameter on every method.
     private final GuestContext guestContext;
 
-    // Whether the cookie should be marked Secure (HTTPS-only). Defaults to
-    // true; set app.guest-cookie.secure=false in a local dev profile if
-    // you're testing over plain HTTP, otherwise the browser will silently
-    // refuse to store the cookie at all.
-    private final boolean secureCookie;
-
-    // "Lax" is enough when frontend+backend share a site (local dev,
-    // same-domain deploys). Cross-site setups (e.g. frontend on Vercel,
-    // backend on Render — see application-prod.yml) need "None", or the
-    // browser silently drops the cookie on cross-origin requests. Mirrors
-    // the same app.jwt.refresh-cookie.same-site pattern already used for
-    // the admin refresh token cookie.
-    private final String sameSite;
-
-    public GuestIdentityFilter(GuestContext guestContext,
-                                @Value("${app.guest-cookie.secure:true}") boolean secureCookie,
-                                @Value("${app.guest-cookie.same-site:Lax}") String sameSite) {
-        this.guestContext = guestContext;
-        this.secureCookie = secureCookie;
-        this.sameSite = sameSite;
-    }
+    private final GuestCookieService guestCookieService;
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
@@ -80,10 +55,11 @@ public class GuestIdentityFilter extends OncePerRequestFilter {
         String guestId = readCookie(request);
 
         // Step 2:
-        // No cookie yet (first-ever visit, or it was cleared) — mint a new,
+        // No cookie yet (first-ever visit, cleared, or just rotated by
+        // CustomerAuthController on the previous request) — mint a new,
         // cryptographically random one.
         if (guestId == null || guestId.isBlank()) {
-            guestId = generateGuestId();
+            guestId = guestCookieService.generateGuestId();
             log.debug("Minted new guest identity cookie");
         } else {
             log.debug("Resolved existing guest identity cookie");
@@ -96,14 +72,7 @@ public class GuestIdentityFilter extends OncePerRequestFilter {
         // Step 4:
         // Always (re-)issue the cookie, even if one already existed — this
         // slides the expiry forward so an active guest's identity keeps renewing.
-        ResponseCookie cookie = ResponseCookie.from(COOKIE_NAME, guestId)
-                .httpOnly(true)
-                .secure(secureCookie)
-                .path("/")
-                .sameSite(sameSite)
-                .maxAge(COOKIE_MAX_AGE)
-                .build();
-        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        guestCookieService.issue(response, guestId);
 
         filterChain.doFilter(request, response);
     }
@@ -119,12 +88,5 @@ public class GuestIdentityFilter extends OncePerRequestFilter {
             }
         }
         return null;
-    }
-
-    // Internal helper: 256 bits of randomness, base64url-encoded (URL/cookie-safe, no padding).
-    private String generateGuestId() {
-        byte[] bytes = new byte[32];
-        secureRandom.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 }

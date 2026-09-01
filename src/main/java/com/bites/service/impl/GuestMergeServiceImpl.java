@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -37,6 +38,21 @@ public class GuestMergeServiceImpl implements GuestMergeService {
     // customer's cart (creating one if they don't have one yet), combining
     // quantities for any item both carts happen to already have, then
     // deletes the now-empty guest cart row.
+    //
+    // IMPORTANT: this deliberately tracks exactly which guest cart_item ids
+    // are redundant (merged-by-quantity duplicates) and deletes ONLY those
+    // by id, instead of the previous approach of reassigning some rows to
+    // the customer cart and then bulk-deleting "everything still pointing
+    // at the guest cart id". That bulk delete ran as its own query right
+    // after save() calls that hadn't necessarily been flushed to the
+    // database yet, which could catch rows that had just been reassigned
+    // to the customer's cart in the same transaction — deleting cart items
+    // that should have survived the merge, and leaving the customer's cart
+    // in a state where a cart_item's cart_id didn't match what the
+    // customer's session now resolves to (surfacing as "this cart item
+    // does not belong to the given cart" the next time the customer
+    // touched their cart). Deleting by explicit id list has no such
+    // ordering dependency.
     private void mergeCart(String guestId, Customer customer) {
         Optional<Cart> guestCartOpt = cartRepository.findByGuestId(guestId);
         if (guestCartOpt.isEmpty()) {
@@ -53,30 +69,43 @@ public class GuestMergeServiceImpl implements GuestMergeService {
         Cart customerCart = cartRepository.findByCustomerId(customer.getId())
                 .orElseGet(() -> cartRepository.save(Cart.builder().customerId(customer.getId()).build()));
 
+        List<Long> redundantGuestItemIds = new ArrayList<>();
+
         for (CartItem guestItem : guestItems) {
             var existingInCustomerCart = cartItemRepository
                     .findByCartIdAndMenuItemId(customerCart.getId(), guestItem.getMenuItem().getId());
 
             if (existingInCustomerCart.isPresent()) {
-                // Already have this dish in the customer cart — just add
-                // the quantities together and leave the guest's row where
-                // it is; it gets swept up by deleteByCartId below.
+                // Customer's cart already has this dish — add the
+                // quantities together and mark this guest row as
+                // redundant so it gets explicitly deleted below.
                 CartItem item = existingInCustomerCart.get();
                 item.setQuantity(item.getQuantity() + guestItem.getQuantity());
                 cartItemRepository.save(item);
+                redundantGuestItemIds.add(guestItem.getId());
             } else {
-                // New to the customer cart — just reassign this exact row
-                // to it instead of copying, so priceAtAddition etc. carry
-                // over untouched.
+                // New to the customer cart — reassign this exact row
+                // to it instead of copying, so priceAtAddition etc.
+                // carry over untouched. Its cart_id is now the customer
+                // cart's, so it is intentionally NOT in the delete list.
                 guestItem.setCart(customerCart);
                 cartItemRepository.save(guestItem);
             }
         }
 
-        // Cleans up any items that were merged-by-quantity above (their
-        // rows are still attached to guestCart); anything reassigned via
-        // setCart() is already gone from this cart, so this is a no-op for those.
-        cartItemRepository.deleteByCartId(guestCart.getId());
+        // Flush the reassignments/quantity updates above to the database
+        // BEFORE deleting anything, so the targeted delete below can never
+        // race against — or accidentally catch — a row that was just
+        // reassigned to the customer's cart in this same transaction.
+        cartItemRepository.flush();
+
+        if (!redundantGuestItemIds.isEmpty()) {
+            cartItemRepository.deleteAllByIdInBatch(redundantGuestItemIds);
+        }
+
+        // At this point every remaining guest cart_item row has either
+        // been reassigned to the customer's cart or explicitly deleted —
+        // the guest cart itself is guaranteed empty, so it's safe to remove.
         cartRepository.delete(guestCart);
         log.info("Merged guest cart into customer account: customerId={}", customer.getId());
     }

@@ -8,6 +8,7 @@ import com.bites.entity.Customer;
 import com.bites.exception.UnauthorizedException;
 import com.bites.mapper.CustomerMapper;
 import com.bites.security.CustomerContext;
+import com.bites.security.GuestCookieService;
 import com.bites.security.JwtProperties;
 import com.bites.security.RefreshCookieProperties;
 import com.bites.service.CustomerAuthService;
@@ -54,6 +55,13 @@ public class CustomerAuthController {
     // properties bean the admin refresh cookie already uses.
     private final RefreshCookieProperties refreshCookieProperties;
 
+    // Rotates the guestId cookie the instant it's no longer needed — right
+    // after a successful login/register (its cart/addresses have just been
+    // merged into the account) and again on logout (so the browser starts
+    // its next guest session completely fresh instead of resuming an
+    // already-merged, now-empty identity). See GuestCookieService for why.
+    private final GuestCookieService guestCookieService;
+
     /*
      * Registers a brand new customer account (name/email/phone/password).
      * Also folds the current browser's guest cart/addresses into the new
@@ -66,6 +74,10 @@ public class CustomerAuthController {
                                                        HttpServletResponse response) {
         CustomerAuthResponse authResponse = customerAuthService.register(request);
         setRefreshCookie(response, authResponse.refreshToken());
+        // The guest identity that existed BEFORE this call was just merged
+        // into the new account inside customerAuthService.register(); this
+        // browser has no further use for it, so retire it and start clean.
+        guestCookieService.rotate(response);
         return ApiResponse.success(authResponse, "Account created successfully");
     }
 
@@ -79,6 +91,9 @@ public class CustomerAuthController {
                                                     HttpServletResponse response) {
         CustomerAuthResponse authResponse = customerAuthService.login(request);
         setRefreshCookie(response, authResponse.refreshToken());
+        // Same reasoning as register() above — the pre-login guest identity
+        // has just been merged and is now retired.
+        guestCookieService.rotate(response);
         return ApiResponse.success(authResponse, "Login successful");
     }
 
@@ -103,8 +118,10 @@ public class CustomerAuthController {
     /*
      * Logs the customer out by revoking the refresh token from the cookie
      * and clearing the cookie itself. The guestId cookie (see
-     * GuestIdentityFilter) is untouched — after logging out, this browser
-     * simply goes back to being a guest.
+     * GuestIdentityFilter) is deliberately ROTATED here too — this browser
+     * goes back to being a guest, but with a brand new empty guest
+     * identity rather than resuming the old one that was already merged
+     * into the account being logged out of.
      */
     @PostMapping("/logout")
     public ApiResponse<Void> logout(
@@ -115,6 +132,7 @@ public class CustomerAuthController {
             customerAuthService.logout(refreshToken);
         }
         clearRefreshCookie(response);
+        guestCookieService.rotate(response);
         return ApiResponse.success(null, "Logged out successfully");
     }
 
