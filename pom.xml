@@ -23,6 +23,7 @@
         <jjwt.version>0.12.6</jjwt.version>
         <springdoc.version>2.6.0</springdoc.version>
         <cloudinary.version>1.39.0</cloudinary.version>
+        <razorpay.version>1.4.4</razorpay.version>
     </properties>
 
     <dependencies>
@@ -90,6 +91,16 @@
             <groupId>com.cloudinary</groupId>
             <artifactId>cloudinary-http44</artifactId>
             <version>${cloudinary.version}</version>
+        </dependency>
+
+        <!-- Online payments (Razorpay) — used by PaymentService to create
+             orders on the gateway and to verify payment signatures/webhooks.
+             Credentials come from RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET /
+             RAZORPAY_WEBHOOK_SECRET (see .env.example), never hardcoded. -->
+        <dependency>
+            <groupId>com.razorpay</groupId>
+            <artifactId>razorpay-java</artifactId>
+            <version>${razorpay.version}</version>
         </dependency>
 
         <!-- API docs -->

@@ -1,5 +1,6 @@
 package com.bites.dto.request;
 
+import com.bites.entity.enums.PaymentMethod;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -61,6 +62,18 @@ public record CheckoutRequest(
         Long buyNowMenuItemId,
 
         @Positive(message = "Quantity must be at least 1")
-        Integer buyNowQuantity
+        Integer buyNowQuantity,
+
+        // --- Payment ---
+        // COD: order is created exactly as before, Payment row stays
+        // PENDING until delivery. ONLINE: backend also creates a Razorpay
+        // order (see PaymentService.createRazorpayOrder) for the
+        // server-computed grandTotal — NEVER for a client-supplied amount —
+        // and returns razorpayOrderId/razorpayKeyId in the response so the
+        // frontend can open the Razorpay Checkout widget. Any other value
+        // (CARD/UPI/WALLET) is rejected — those exist on the enum only for
+        // backward compatibility, see PaymentMethod.
+        @NotNull(message = "Payment method is required")
+        PaymentMethod paymentMethod
 ) {
 }

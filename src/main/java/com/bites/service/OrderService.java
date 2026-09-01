@@ -2,6 +2,7 @@ package com.bites.service;
 
 import com.bites.dto.request.CheckoutRequest;
 import com.bites.dto.request.OrderFilterRequest;
+import com.bites.dto.request.PaymentVerificationRequest;
 import com.bites.dto.response.OrderResponse;
 import com.bites.dto.response.PageResponse;
 import com.bites.entity.Order;
@@ -21,6 +22,14 @@ public interface OrderService {
     // CartService/AddressService — and the order is linked straight to that
     // customer's own account instead of a fresh/matching phone-based row.
     OrderResponse checkout(Long customerId, String guestId, CheckoutRequest request);
+
+    // Called right after the Razorpay Checkout widget's success callback
+    // fires on the frontend — re-verifies the payment server-side (HMAC
+    // signature + fetch-and-compare against Razorpay's own records, see
+    // PaymentServiceImpl) and only then marks the order's payment as PAID.
+    // orderNumber scopes this to one specific order, same "order number is
+    // the credential" model as tracking/cancelling.
+    OrderResponse verifyPayment(String orderNumber, PaymentVerificationRequest request);
 
     // "My Orders" — every order placed by this caller, newest first. For a
     // guest this is scoped to guestId (this browser only, from the HttpOnly

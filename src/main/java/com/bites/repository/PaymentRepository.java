@@ -9,4 +9,9 @@ import java.util.Optional;
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
     // Used to look up the payment linked to a specific order (e.g. checking payment status).
     Optional<Payment> findByOrderId(Long orderId);
+
+    // Used by the Razorpay verify-payment and webhook flows to find which
+    // Payment row a given Razorpay order corresponds to — gatewayOrderId is
+    // the only thing both of those calls have in common with our DB.
+    Optional<Payment> findByGatewayOrderId(String gatewayOrderId);
 }

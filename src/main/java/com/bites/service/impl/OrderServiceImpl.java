@@ -2,9 +2,11 @@ package com.bites.service.impl;
 
 import com.bites.dto.request.CheckoutRequest;
 import com.bites.dto.request.OrderFilterRequest;
+import com.bites.dto.request.PaymentVerificationRequest;
 import com.bites.dto.response.OrderItemResponse;
 import com.bites.dto.response.OrderResponse;
 import com.bites.dto.response.PageResponse;
+import com.bites.config.RazorpayProperties;
 import com.bites.entity.Cart;
 import com.bites.entity.CartItem;
 import com.bites.entity.Customer;
@@ -31,6 +33,7 @@ import com.bites.service.CustomerService;
 import com.bites.service.DeliveryPricingResult;
 import com.bites.service.DeliveryPricingService;
 import com.bites.service.OrderService;
+import com.bites.service.PaymentService;
 import com.bites.util.OrderNumberGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,6 +67,8 @@ public class OrderServiceImpl implements OrderService {
     private final CustomerService customerService;
     private final CustomerRepository customerRepository;
     private final OrderNumberGenerator orderNumberGenerator;
+    private final PaymentService paymentService;
+    private final RazorpayProperties razorpayProperties;
 
     private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_STATUS_TRANSITIONS = Map.of(
             OrderStatus.PENDING, Set.of(OrderStatus.ACCEPTED, OrderStatus.CANCELLED),
@@ -79,6 +84,13 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse checkout(Long customerId, String guestId, CheckoutRequest request) {
         log.info("Creating order");
 
+        // Only COD and ONLINE are real checkout options today — CARD/UPI/
+        // WALLET exist on the enum purely for backward compatibility (see
+        // PaymentMethod) and aren't valid inputs here.
+        if (request.paymentMethod() != PaymentMethod.COD && request.paymentMethod() != PaymentMethod.ONLINE) {
+            throw new BadRequestException("paymentMethod must be either COD or ONLINE");
+        }
+
         try {
             List<LineItem> lineItems = resolveLineItems(customerId, guestId, request);
 
@@ -93,6 +105,12 @@ public class OrderServiceImpl implements OrderService {
                         .orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + customerId))
                     : customerService.findOrCreateByPhone(request.name(), request.phone());
 
+            // Subtotal/grandTotal are computed ENTIRELY from our own DB
+            // values (menu item prices, delivery pricing slabs) — never
+            // from anything the client sends. This is what later gets
+            // handed to Razorpay as the amount to charge (see
+            // PaymentService.createOnlinePayment), so there's no path for
+            // a manipulated price to reach the payment gateway.
             BigDecimal subtotal = lineItems.stream()
                     .map(LineItem::subtotal)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -127,12 +145,20 @@ public class OrderServiceImpl implements OrderService {
 
             Order savedOrder = orderRepository.save(order);
 
-            Payment payment = Payment.builder()
-                    .order(savedOrder)
-                    .method(PaymentMethod.COD)
-                    .status(PaymentStatus.PENDING)
-                    .build();
-            paymentRepository.save(payment);
+            if (request.paymentMethod() == PaymentMethod.ONLINE) {
+                // Creates the Razorpay order for savedOrder.getGrandTotal()
+                // and saves the Payment row itself (method=ONLINE,
+                // status=PENDING, gatewayOrderId set) — see
+                // PaymentServiceImpl.createOnlinePayment.
+                paymentService.createOnlinePayment(savedOrder);
+            } else {
+                Payment payment = Payment.builder()
+                        .order(savedOrder)
+                        .method(PaymentMethod.COD)
+                        .status(PaymentStatus.PENDING)
+                        .build();
+                paymentRepository.save(payment);
+            }
 
             if (request.buyNowMenuItemId() == null) {
                 cartService.clearCart(customerId, guestId);
@@ -144,6 +170,23 @@ public class OrderServiceImpl implements OrderService {
             log.error("Failed to create order", e);
             throw e;
         }
+    }
+
+    @Override
+    @Transactional
+    public OrderResponse verifyPayment(String orderNumber, PaymentVerificationRequest request) {
+        Order order = orderRepository.findByOrderNumber(orderNumber)
+                .orElseThrow(() -> new ResourceNotFoundException("No order found with id: " + orderNumber));
+
+        // Delegates the actual HMAC/fetch-and-compare verification to
+        // PaymentServiceImpl — this method's only job is translating
+        // "verify this order's payment" into "verify this Razorpay
+        // order/payment pair" and turning the result back into an
+        // OrderResponse.
+        paymentService.verifyAndCapture(request);
+
+        log.info("Payment verified for order: orderNumber={}", orderNumber);
+        return toResponse(order);
     }
 
     @Override
@@ -244,6 +287,16 @@ public class OrderServiceImpl implements OrderService {
 
         boolean cancellable = isCancellable(order);
 
+        // Only surface the Razorpay handshake fields while there's actually
+        // something for the frontend to do with them — an ONLINE payment
+        // still sitting PENDING (i.e. checkout just happened, widget not
+        // opened/completed yet). Once PAID (or for COD orders entirely),
+        // there's nothing left to check out, so leave them null.
+        boolean awaitingOnlinePayment = payment.getMethod() == PaymentMethod.ONLINE
+                && payment.getStatus() == PaymentStatus.PENDING;
+        String razorpayOrderId = awaitingOnlinePayment ? payment.getGatewayOrderId() : null;
+        String razorpayKeyId = awaitingOnlinePayment ? razorpayProperties.getKeyId() : null;
+
         return new OrderResponse(
                 order.getId(),
                 order.getOrderNumber(),
@@ -260,6 +313,8 @@ public class OrderServiceImpl implements OrderService {
                 order.getGrandTotal(),
                 payment.getMethod(),
                 payment.getStatus(),
+                razorpayOrderId,
+                razorpayKeyId,
                 order.getPlacedAt(),
                 cancellable
         );

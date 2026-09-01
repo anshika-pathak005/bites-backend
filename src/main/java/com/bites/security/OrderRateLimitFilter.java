@@ -42,6 +42,11 @@ public class OrderRateLimitFilter extends OncePerRequestFilter {
     // POST /api/orders/{orderNumber}/cancel — same reasoning as tracking.
     private static final Pattern CANCEL_PATH = Pattern.compile("^/api/orders/[^/]+/cancel$");
 
+    // POST /api/orders/{orderNumber}/verify-payment — same reasoning again;
+    // the signature itself can't be brute-forced, but the order number can
+    // still be probed, so it gets the same throttling as track/cancel.
+    private static final Pattern VERIFY_PAYMENT_PATH = Pattern.compile("^/api/orders/[^/]+/verify-payment$");
+
     // POST /api/orders — checkout itself; limited separately (more generous)
     // just to stop spam-order flooding, not a guessing concern.
     private static final String CHECKOUT_PATH = "/api/orders";
@@ -96,7 +101,8 @@ public class OrderRateLimitFilter extends OncePerRequestFilter {
     private boolean isTrackOrCancelRequest(HttpServletRequest request) {
         String uri = request.getRequestURI();
         return ("GET".equalsIgnoreCase(request.getMethod()) && TRACK_PATH.matcher(uri).matches())
-                || ("POST".equalsIgnoreCase(request.getMethod()) && CANCEL_PATH.matcher(uri).matches());
+                || ("POST".equalsIgnoreCase(request.getMethod()) && CANCEL_PATH.matcher(uri).matches())
+                || ("POST".equalsIgnoreCase(request.getMethod()) && VERIFY_PAYMENT_PATH.matcher(uri).matches());
     }
 
     private boolean isCheckoutRequest(HttpServletRequest request) {

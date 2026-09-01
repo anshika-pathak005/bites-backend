@@ -1,6 +1,7 @@
 package com.bites.controller.customer;
 
 import com.bites.dto.request.CheckoutRequest;
+import com.bites.dto.request.PaymentVerificationRequest;
 import com.bites.dto.response.OrderResponse;
 import com.bites.entity.Customer;
 import com.bites.security.CustomerContext;
@@ -47,6 +48,17 @@ public class OrderController {
     public ApiResponse<OrderResponse> checkout(@Valid @RequestBody CheckoutRequest request) {
         return ApiResponse.success(
                 orderService.checkout(currentCustomerId(), guestContext.getGuestId(), request), "Order placed successfully");
+    }
+
+    // Called by the frontend right after the Razorpay Checkout widget's
+    // success callback fires (paymentMethod=ONLINE orders only). Re-verifies
+    // the payment server-side before marking it PAID — see
+    // PaymentServiceImpl.verifyAndCapture. Works purely by order number,
+    // same as track/cancel — no guestId/customerId check needed.
+    @PostMapping("/{orderNumber}/verify-payment")
+    public ApiResponse<OrderResponse> verifyPayment(@PathVariable String orderNumber,
+                                                     @Valid @RequestBody PaymentVerificationRequest request) {
+        return ApiResponse.success(orderService.verifyPayment(orderNumber, request), "Payment verified");
     }
 
     // "My Orders" — every order this caller has placed, newest first. This

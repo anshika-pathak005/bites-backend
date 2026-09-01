@@ -29,6 +29,10 @@ import java.time.LocalDateTime;
  * v1 only ever creates COD/PENDING rows. method and status are already
  * modeled as open enums so a real gateway (CARD/UPI/WALLET + a webhook
  * flipping status to PAID/FAILED) plugs in without a schema change.
+ *
+ * As of the Razorpay integration, ONLINE payments also flow through this
+ * same table — see gatewayOrderId/failureReason below, and
+ * PaymentServiceImpl for the create-order / verify / webhook logic.
  */
 @Entity
 @Table(name = "payment", uniqueConstraints = @UniqueConstraint(name = "uq_payment_order_id", columnNames = "order_id"))
@@ -62,8 +66,24 @@ public class Payment {
     private PaymentStatus status = PaymentStatus.PENDING;
 
     // Reference id from the payment gateway, if any (not used for COD).
+    // For Razorpay (method = ONLINE), this holds the PAYMENT id
+    // (e.g. "pay_Hh..."), set only once the payment is verified as
+    // successful — see PaymentServiceImpl.verifyAndCapture.
     @Column(name = "transaction_id", length = 150)
     private String transactionId;
+
+    // Razorpay's ORDER id (e.g. "order_Hh..."), created up front — before
+    // the customer has actually paid — so we have something to look this
+    // payment back up by when Razorpay's webhook/verify call arrives later.
+    // Null for COD payments, which never talk to a gateway at all.
+    @Column(name = "gateway_order_id", length = 100)
+    private String gatewayOrderId;
+
+    // Why this payment ended up FAILED, if it did (e.g. "Payment declined
+    // by bank") — surfaced from Razorpay's payment.failed webhook/verify
+    // step, purely for admin/support visibility. Null otherwise.
+    @Column(name = "failure_reason", length = 255)
+    private String failureReason;
 
     // When the payment was confirmed as paid; null until then.
     @Column(name = "paid_at")

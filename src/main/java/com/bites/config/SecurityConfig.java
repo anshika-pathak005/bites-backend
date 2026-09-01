@@ -102,6 +102,7 @@ public class SecurityConfig {
                                 "/api/orders", // POST checkout, GET list-mine — guest OR logged-in customer, resolved inside the service
                                 "/api/orders/*/cancel", // POST cancel — guest, order-number is the credential
                                 "/api/restaurant",
+                                "/api/payments/webhook/**", // called by Razorpay's servers directly — verified via signature, not a login
                                 "/api/admin/auth/**",
                                 "/api/customer/auth/register",
                                 "/api/customer/auth/login",

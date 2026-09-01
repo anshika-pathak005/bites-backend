@@ -52,6 +52,17 @@ public record OrderResponse(
 
         PaymentStatus paymentStatus,
 
+        // Only populated right after checkout with paymentMethod=ONLINE,
+        // while the payment is still PENDING — this is what the frontend
+        // needs to open the Razorpay Checkout widget. Null for COD orders
+        // and null again once the payment has already been verified/paid
+        // (see OrderServiceImpl.toResponse).
+        String razorpayOrderId,
+
+        // Razorpay's public key id — safe to expose, the Checkout widget
+        // requires it. Same nullability as razorpayOrderId above.
+        String razorpayKeyId,
+
         LocalDateTime placedAt,
 
         // True if THIS order can be self-cancelled right now (status is

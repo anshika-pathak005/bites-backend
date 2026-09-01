@@ -5,6 +5,7 @@ import com.bites.entity.Restaurant;
 import com.bites.entity.enums.OrderStatus;
 import com.bites.exception.BadRequestException;
 import com.bites.exception.ResourceNotFoundException;
+import com.bites.config.RazorpayProperties;
 import com.bites.repository.*;
 import com.bites.service.impl.OrderServiceImpl;
 import com.bites.util.OrderNumberGenerator;
@@ -47,6 +48,10 @@ class OrderServiceImplTest {
     private CustomerRepository customerRepository;
     @Mock
     private OrderNumberGenerator orderNumberGenerator;
+    @Mock
+    private PaymentService paymentService;
+    @Mock
+    private RazorpayProperties razorpayProperties;
 
     private OrderServiceImpl orderService;
 
@@ -63,7 +68,9 @@ class OrderServiceImplTest {
                 restaurantRepository,
                 customerService,
                 customerRepository,
-                orderNumberGenerator
+                orderNumberGenerator,
+                paymentService,
+                razorpayProperties
         );
     }
 

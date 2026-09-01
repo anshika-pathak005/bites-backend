@@ -2,6 +2,7 @@ package com.bites.controller.admin;
 
 import com.bites.dto.request.DeliveryChargeSlabRequest;
 import com.bites.dto.response.DeliveryChargeSlabResponse;
+import com.bites.dto.response.DeliveryChargeSlabsResponse;
 import com.bites.service.DeliveryChargeSlabService;
 import com.bites.util.ApiResponse;
 import jakarta.validation.Valid;
@@ -15,8 +16,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 /*
  * Handles admin endpoints for managing the distance -> delivery charge
@@ -32,9 +31,11 @@ public class AdminDeliveryChargeSlabController {
 
     private final DeliveryChargeSlabService slabService;
 
-    // Lists every slab for the admin "Delivery Pricing" screen.
+    // Lists every slab for the admin "Delivery Pricing" screen, plus the
+    // restaurant's current max delivery radius (see
+    // DeliveryChargeSlabsResponse).
     @GetMapping
-    public ApiResponse<List<DeliveryChargeSlabResponse>> getAll() {
+    public ApiResponse<DeliveryChargeSlabsResponse> getAll() {
         return ApiResponse.success(slabService.getAllForAdmin());
     }
 
