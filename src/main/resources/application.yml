@@ -9,7 +9,7 @@ spring:
     password: ${DB_PASSWORD}
   jpa:
     hibernate:
-      ddl-auto: validate   # schema is owned by Flyway migrations, not Hibernate
+      ddl-auto: validate # schema is owned by Flyway migrations, not Hibernate
     open-in-view: false
     properties:
       hibernate:
