@@ -38,7 +38,9 @@ INSERT INTO delivery_charge_slab (min_distance_km, max_distance_km, charge, is_a
 --    now computed from latitude/longitude alone at checkout time.
 -- ---------------------------------------------------------------------
 ALTER TABLE customer_address
-    DROP FOREIGN KEY fk_address_delivery_area,
+    DROP FOREIGN KEY fk_address_delivery_area;
+
+ALTER TABLE customer_address
     DROP COLUMN delivery_area_id;
 
 -- ---------------------------------------------------------------------
@@ -47,7 +49,9 @@ ALTER TABLE customer_address
 --    disputes without re-deriving it from a since-changed address).
 -- ---------------------------------------------------------------------
 ALTER TABLE orders
-    DROP FOREIGN KEY fk_orders_delivery_area,
+    DROP FOREIGN KEY fk_orders_delivery_area;
+
+ALTER TABLE orders
     DROP COLUMN delivery_area_id,
     ADD COLUMN distance_km DECIMAL(6,3) NULL,
     ADD COLUMN pincode VARCHAR(10) NULL;

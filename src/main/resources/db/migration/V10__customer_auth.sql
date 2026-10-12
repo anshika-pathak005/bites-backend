@@ -27,8 +27,12 @@ ALTER TABLE cart
     ADD CONSTRAINT uq_cart_customer_id UNIQUE (customer_id);
 
 ALTER TABLE customer_address
-    ADD COLUMN customer_id BIGINT NULL,
-    ADD CONSTRAINT fk_customer_address_customer FOREIGN KEY (customer_id) REFERENCES customer(id) ON DELETE SET NULL;
+    ADD COLUMN customer_id BIGINT NULL;
+
+ALTER TABLE customer_address
+    ADD CONSTRAINT fk_customer_address_customer
+    FOREIGN KEY (customer_id) REFERENCES customer(id)
+    ON DELETE SET NULL;
 
 CREATE INDEX idx_customer_address_customer_id ON customer_address(customer_id);
 

@@ -137,7 +137,7 @@ CREATE TABLE menu_item (
 
 CREATE INDEX idx_menu_item_category_id ON menu_item(category_id);
 CREATE INDEX idx_menu_item_flags ON menu_item(is_available, is_best_seller, is_todays_special);
-CREATE FULLTEXT INDEX idx_menu_item_search ON menu_item(name, description);
+-- CREATE FULLTEXT INDEX idx_menu_item_search ON menu_item(name, description);
 
 -- ---------------------------------------------------------------------
 -- 9. CART  (guest carts tracked by session_id; customer_id once logged in)

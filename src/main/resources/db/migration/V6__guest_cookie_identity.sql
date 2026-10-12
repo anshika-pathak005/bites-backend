@@ -22,10 +22,16 @@ ALTER TABLE cart
 -- address ownership is now purely guest_id, resolved from the HttpOnly
 -- cookie (see AddressController). Add guest_id as the real ownership column.
 ALTER TABLE customer_address
-    DROP FOREIGN KEY fk_address_customer,
-    DROP COLUMN customer_id,
-    ADD COLUMN guest_id VARCHAR(64) NOT NULL,
-    ADD INDEX idx_customer_address_guest_id (guest_id);
+    DROP FOREIGN KEY fk_address_customer;
+
+ALTER TABLE customer_address
+    DROP COLUMN customer_id;
+
+ALTER TABLE customer_address
+    ADD COLUMN guest_id VARCHAR(64) NOT NULL;
+
+CREATE INDEX idx_customer_address_guest_id
+    ON customer_address (guest_id);
 
 -- orders: add guest_id — powers "GET /api/orders" (list everything for
 -- this browser). Order-level tracking/cancellation by a single order
@@ -33,5 +39,7 @@ ALTER TABLE customer_address
 -- guest_id here is only used for the list-all-mine view, not as an
 -- authorization gate on individual order actions.
 ALTER TABLE orders
-    ADD COLUMN guest_id VARCHAR(64) NULL,
-    ADD INDEX idx_orders_guest_id (guest_id);
+    ADD COLUMN guest_id VARCHAR(64) NULL;
+
+CREATE INDEX idx_orders_guest_id
+    ON orders (guest_id);

@@ -10,8 +10,10 @@
 -- payment.failed webhook / verify step), useful for admin/support visibility
 -- into why a customer's payment didn't go through.
 ALTER TABLE payment
-    ADD COLUMN gateway_order_id VARCHAR(100) NULL,
-    ADD COLUMN failure_reason   VARCHAR(255) NULL;
+    ADD COLUMN gateway_order_id VARCHAR(100) NULL;
+
+ALTER TABLE payment
+    ADD COLUMN failure_reason VARCHAR(255) NULL;
 
 -- One Razorpay order should never be linked to more than one payment row.
 ALTER TABLE payment

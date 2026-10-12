@@ -1,9 +1,40 @@
+# Maven build output
 target/
+
+# Java compiled files
 *.class
+
+# IDE files
 .idea/
 *.iml
 .vscode/
+
+# Environment variables and secrets
 .env
+.env.*
+!.env.example
+!.env.sample
+
+# Logs
+*.log
+
+# JVM crash and replay logs
+hs_err_pid*
+replay_pid*
+
+# OS generated files
 .DS_Store
+Thumbs.db
+desktop.ini
+
+# Local configuration
+application-local.properties
+application-local.yml
+application-dev.properties
+application-dev.yml
+
+# Spring Boot generated files
+spring.log
+
+# Miscellaneous
 HELP.md
-README.md
