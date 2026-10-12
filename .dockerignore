@@ -1,0 +1,29 @@
+# ── Source & IDE ───────────────────────────────────────────────────────────────
+# Compiled output — the build stage produces its own target/ inside the container.
+target/
+
+# IDE project files
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# ── Secrets — NEVER bake these into the image ──────────────────────────────────
+.env
+# (keep .env.example so the image build context can include it for reference if needed)
+
+# ── Version control ────────────────────────────────────────────────────────────
+.git/
+.gitignore
+.gitattributes
+
+# ── Docker itself ──────────────────────────────────────────────────────────────
+Dockerfile
+.dockerignore
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+*.md
